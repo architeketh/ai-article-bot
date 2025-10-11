@@ -194,7 +194,7 @@ const App = () => {
           try {
             // Using RSS2JSON service - get free API key at rss2json.com
             const response = await fetch(
-              `https://api.rss2json.com/v1/api.json?rss_url=${q1ihf2w1uk1uwljssn3dngzhms9ajhqjpzfpqgf4(feed.url)&count=20`
+              'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(feed.url) + '&api_key=q1ihf2w1uk1uwljssn3dngzhms9ajhqjpzfpqgf4&count=20'
             );
             
             if (!response.ok) {
