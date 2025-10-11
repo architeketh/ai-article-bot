@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Bookmark, TrendingUp, Clock, ExternalLink, Moon, Sun, Building2, BarChart3, Calendar, Sparkles, RefreshCw, AlertCircle, Heart, Archive } from 'lucide-react';
+import { Search, Filter, Bookmark, TrendingUp, Clock, ExternalLink, Moon, Sun, Building2, BarChart3, Calendar, Sparkles, RefreshCw, AlertCircle, Heart, Archive, ArchiveRestore, Trash2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 const App = () => {
@@ -248,6 +248,59 @@ const App = () => {
     localStorage.setItem('manualArticles', JSON.stringify(manualArticles));
     
     alert('Article added successfully!');
+  };
+
+  // NEW: Manual archive function
+  const archiveArticle = (articleId) => {
+    setArticles(prev => prev.map(article => 
+      article.id === articleId ? { ...article, archived: true } : article
+    ));
+    
+    // Update localStorage
+    const archivedArticles = JSON.parse(localStorage.getItem('archivedArticles') || '[]');
+    const articleToArchive = articles.find(a => a.id === articleId);
+    if (articleToArchive && !archivedArticles.find(a => a.id === articleId)) {
+      archivedArticles.push({ ...articleToArchive, archived: true });
+      localStorage.setItem('archivedArticles', JSON.stringify(archivedArticles));
+    }
+  };
+
+  // NEW: Restore from archive
+  const restoreArticle = (articleId) => {
+    setArticles(prev => prev.map(article => 
+      article.id === articleId ? { ...article, archived: false } : article
+    ));
+    
+    // Update localStorage
+    const archivedArticles = JSON.parse(localStorage.getItem('archivedArticles') || '[]');
+    const updatedArchived = archivedArticles.filter(a => a.id !== articleId);
+    localStorage.setItem('archivedArticles', JSON.stringify(updatedArchived));
+  };
+
+  // NEW: Permanently delete article
+  const deleteArticle = (articleId) => {
+    if (!confirm('Are you sure you want to permanently delete this article? This cannot be undone.')) {
+      return;
+    }
+    
+    // Remove from articles state
+    setArticles(prev => prev.filter(article => article.id !== articleId));
+    
+    // Remove from savedArticles
+    if (savedArticles.includes(articleId)) {
+      const newSaved = savedArticles.filter(id => id !== articleId);
+      setSavedArticles(newSaved);
+      localStorage.setItem('savedArticles', JSON.stringify(newSaved));
+    }
+    
+    // Remove from localStorage
+    const archivedArticles = JSON.parse(localStorage.getItem('archivedArticles') || '[]');
+    const updatedArchived = archivedArticles.filter(a => a.id !== articleId);
+    localStorage.setItem('archivedArticles', JSON.stringify(updatedArchived));
+    
+    const manualArticles = JSON.parse(localStorage.getItem('manualArticles') || '[]');
+    const updatedManual = manualArticles.filter(a => a.id !== articleId);
+    localStorage.setItem('manualArticles', JSON.stringify(updatedManual));
   };
 
   useEffect(() => {
@@ -594,8 +647,9 @@ const App = () => {
             </div>
             <div className={'p-5 rounded-xl border ' + (darkMode ? 'bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-blue-500/30' : 'bg-gradient-to-br from-blue-50 to-purple-50 border-blue-200')}>
               <p className={'text-sm leading-relaxed ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>
-                Displaying {articles.filter(a => !a.archived).length} recent articles with {articles.filter(a => a.archived).length} archived. Click <strong>"+ Add Article"</strong> to manually add articles by URL. 
-                Articles refresh every 30 minutes and are archived after 7 days.
+                Displaying {articles.filter(a => !a.archived).length} recent articles with {articles.filter(a => a.archived).length} archived. 
+                Use the <strong>Archive</strong> button to manually archive articles, or <strong>Delete</strong> to permanently remove them. 
+                Articles auto-archive after 7 days and can be restored anytime.
               </p>
             </div>
           </div>
@@ -628,7 +682,7 @@ const App = () => {
           <div className={'text-center py-16 ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
             <Archive className="w-16 h-16 mx-auto mb-4 opacity-50" />
             <p className="text-xl">No archived articles yet</p>
-            <p className="text-sm mt-2">Articles older than 7 days will appear here</p>
+            <p className="text-sm mt-2">Articles will auto-archive after 7 days, or you can manually archive them</p>
           </div>
         )}
 
@@ -669,9 +723,11 @@ const App = () => {
                   <span className="text-2xl">{article.sourceLogo}</span>
                   <span className={'text-xs font-medium ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>{article.source}</span>
                 </div>
-                <button onClick={() => toggleSave(article.id)} className={'relative ' + (savedArticles.includes(article.id) ? 'text-yellow-500' : (darkMode ? 'text-gray-500 hover:text-yellow-400' : 'text-gray-400 hover:text-yellow-500'))}>
-                  <Bookmark className="w-5 h-5" fill={savedArticles.includes(article.id) ? 'currentColor' : 'none'} />
-                </button>
+                <div className="flex gap-1">
+                  <button onClick={() => toggleSave(article.id)} className={'relative ' + (savedArticles.includes(article.id) ? 'text-yellow-500' : (darkMode ? 'text-gray-500 hover:text-yellow-400' : 'text-gray-400 hover:text-yellow-500'))}>
+                    <Bookmark className="w-5 h-5" fill={savedArticles.includes(article.id) ? 'currentColor' : 'none'} />
+                  </button>
+                </div>
               </div>
               {(article.archived || article.manual) && (
                 <div className="flex gap-2 mb-2">
@@ -699,7 +755,39 @@ const App = () => {
                 <span className={'px-2 py-1 rounded-md text-xs font-medium ' + (darkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-700')}>{article.category}</span>
                 {article.trending && <span className={'px-2 py-1 rounded-md text-xs flex items-center gap-1 ' + (darkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-700')}><TrendingUp className="w-3 h-3" />Trending</span>}
               </div>
-              <div className={'flex items-center justify-between pt-4 border-t ' + (darkMode ? 'border-gray-700' : 'border-gray-200')}>
+              
+              {/* Action buttons */}
+              <div className={'flex items-center justify-between gap-2 mb-4 pb-4 border-b ' + (darkMode ? 'border-gray-700' : 'border-gray-200')}>
+                {!article.archived ? (
+                  <button
+                    onClick={() => archiveArticle(article.id)}
+                    className={'flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition ' + (darkMode ? 'bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20' : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100')}
+                    title="Archive this article"
+                  >
+                    <Archive className="w-3.5 h-3.5" />
+                    Archive
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => restoreArticle(article.id)}
+                    className={'flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition ' + (darkMode ? 'bg-green-500/10 text-green-400 hover:bg-green-500/20' : 'bg-green-50 text-green-700 hover:bg-green-100')}
+                    title="Restore from archive"
+                  >
+                    <ArchiveRestore className="w-3.5 h-3.5" />
+                    Restore
+                  </button>
+                )}
+                <button
+                  onClick={() => deleteArticle(article.id)}
+                  className={'flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition ' + (darkMode ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20' : 'bg-red-50 text-red-700 hover:bg-red-100')}
+                  title="Permanently delete"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Delete
+                </button>
+              </div>
+
+              <div className={'flex items-center justify-between pt-2'}>
                 <div className="flex items-center gap-3 text-xs">
                   <span className={'flex items-center gap-1 ' + (darkMode ? 'text-gray-500' : 'text-gray-500')}><Clock className="w-3.5 h-3.5" />{article.readTime} min</span>
                   <span className={'flex items-center gap-1 ' + (darkMode ? 'text-gray-500' : 'text-gray-500')}><Calendar className="w-3.5 h-3.5" />{getRelativeTime(article.date)}</span>
