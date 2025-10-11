@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Bookmark, TrendingUp, Clock, ExternalLink, Moon, Sun, Building2, BarChart3, Calendar, Sparkles, RefreshCw, AlertCircle, Heart } from 'lucide-react';
+import { Search, Filter, Bookmark, TrendingUp, Clock, ExternalLink, Moon, Sun, Building2, BarChart3, Calendar, Sparkles, RefreshCw, AlertCircle, Heart, Archive } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 const App = () => {
@@ -16,27 +16,8 @@ const App = () => {
   const [articles, setArticles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('all'); // 'all' or 'saved'
+  const [activeTab, setActiveTab] = useState('all');
 
-  // AI Architecture-focused keywords for filtering
-  const AI_ARCHITECTURE_KEYWORDS = [
-    'ai', 'artificial intelligence', 'machine learning', 'neural network', 'deep learning',
-    'generative design', 'generative', 'parametric', 'computational design',
-    'bim', 'building information modeling', 'revit', 'archicad',
-    'rendering', 'visualization', 'midjourney', 'stable diffusion', 'dall-e',
-    'algorithm', 'optimization', 'automation', 'digital fabrication',
-    'blockchain', 'smart contract', 'nft',
-    'grasshopper', 'rhino', 'dynamo',
-    'gpt', 'chatgpt', 'claude', 'llm',
-    'nerf', 'gaussian splatting', 'photogrammetry',
-    '3d printing', 'robotic construction', 'prefabrication',
-    'sustainable', 'energy efficiency', 'climate',
-    'digital twin', 'simulation', 'performance analysis',
-    'design process', 'design tool', 'workflow', 'collaboration',
-    'render', '3d', 'vray', 'unreal', 'unity', 'blender'
-  ];
-
-  // Curated RSS feeds for AI in Architecture
   const RSS_FEEDS = [
     {
       url: 'https://www.archdaily.com/feed',
@@ -131,50 +112,6 @@ const App = () => {
     }
   ];
 
-  // Enhanced relevance checking
-  const isRelevantArticle = (title, description) => {
-  const text = (title + ' ' + description).toLowerCase();
-  
-  // HIGH PRIORITY: Rendering
-    
-    const highPriorityPatterns = [
-      /ai.*architect/,
-      /architect.*ai/,
-      /generative.*design/,
-      /design.*process.*ai/,
-      /ai.*design.*tool/,
-      /midjourney.*architect/,
-      /stable diffusion.*design/,
-      /ai.*transform.*architect/,
-      /architect.*guide.*ai/,
-      /firm.*ai/,
-      /studio.*ai/,
-      /practice.*ai/,
-      /render.*ai/,
-      /ai.*render/,
-      /visualization.*ai/,
-      /ai.*visualization/
-    ];
-    
-    if (highPriorityPatterns.some(pattern => pattern.test(text))) {
-      return true;
-    }
-    
-    const hasAIKeyword = text.match(/\b(ai|artificial intelligence|machine learning|neural)\b/);
-    const hasArchKeyword = text.match(/\b(architect|design|building|construction|bim|parametric|generative|render)\b/);
-    
-    if (hasAIKeyword && hasArchKeyword) {
-      return true;
-    }
-    
-    if (text.match(/midjourney|stable diffusion|dall-e|chatgpt|grasshopper|dynamo|revit.*ai|nerf|gaussian/)) {
-      return true;
-    }
-    
-    return false;
-  };
-
-  // Enhanced categorization
   const categorizeArticle = (title, description, defaultCategory) => {
     const text = (title + ' ' + description).toLowerCase();
     
@@ -198,8 +135,7 @@ const App = () => {
       return 'BIM & Digital Tools';
     }
     
-    // Make rendering detection more aggressive
-    if (text.match(/render|rendering|visualization|visuali[sz]e|3d.*visual|photorealistic|vray|lumion|unreal|unity|blender|corona|octane/)) {
+    if (text.match(/render|rendering|visualization|visuali[sz]e|3d.*visual|photorealistic|vray|lumion|unreal|unity|blender|corona|octane|lookx|ai.*render|render.*ai/)) {
       return 'Rendering & Visualization';
     }
     
@@ -242,7 +178,6 @@ const App = () => {
     return defaultCategory;
   };
 
-  // Enhanced keyword extraction
   const extractKeywords = (text) => {
     const foundKeywords = [];
     const lowerText = text.toLowerCase();
@@ -252,7 +187,7 @@ const App = () => {
       'stable diffusion': ['stable diffusion', 'diffusion model'],
       'chatgpt': ['chatgpt', 'gpt-4', 'gpt'],
       'generative design': ['generative', 'parametric'],
-      'ai rendering': ['render', 'visualization', 'ai.*render'],
+      'ai rendering': ['render', 'visualization', 'ai.*render', 'lookx'],
       'bim': ['bim', 'revit', 'building information'],
       'machine learning': ['machine learning', 'ml', 'neural'],
       'design process': ['design process', 'workflow', 'practice'],
@@ -273,21 +208,20 @@ const App = () => {
     }
     
     if (foundKeywords.length === 0) {
-      const words = lowerText.split(/\W+/)
-        .filter(word => word.length > 4 && AI_ARCHITECTURE_KEYWORDS.includes(word));
+      const words = lowerText.split(/\W+/).filter(word => word.length > 4);
       foundKeywords.push(...words.slice(0, 3));
     }
     
     return foundKeywords.slice(0, 4);
   };
 
-  // Fetch articles from RSS feeds
   useEffect(() => {
     const fetchArticles = async () => {
       setLoading(true);
       setError(null);
       
       try {
+        const archivedArticles = JSON.parse(localStorage.getItem('archivedArticles') || '[]');
         const allArticles = [];
         
         for (const feed of RSS_FEEDS) {
@@ -308,15 +242,22 @@ const App = () => {
                 .filter(item => {
                   const title = item.title || '';
                   const description = item.description || '';
-                  return isRelevantArticle(title, description);
+                  const text = (title + ' ' + description).toLowerCase();
+                  
+                  const hasAIKeyword = /\b(ai|artificial intelligence|machine learning|neural|generative|parametric|computational)\b/i.test(text);
+                  const hasArchKeyword = /\b(architect|design|building|construction|render|bim|visualization)\b/i.test(text);
+                  
+                  return hasAIKeyword || hasArchKeyword;
                 })
                 .map((item, index) => {
                   const title = item.title || 'Untitled';
                   const description = item.description || '';
                   const cleanDescription = description.replace(/<[^>]*>/g, '').substring(0, 200);
                   
+                  const stableId = item.link || item.guid || (feed.source + '-' + title.replace(/\W/g, '').substring(0, 30));
+                  
                   return {
-                    id: item.link || item.guid || (feed.source + '-' + item.title.substring(0, 30).replace(/\W/g, '')),
+                    id: stableId,
                     title: title,
                     source: feed.source,
                     sourceLogo: feed.logo,
@@ -329,7 +270,8 @@ const App = () => {
                     trending: Math.random() > 0.75,
                     keywords: extractKeywords(title + ' ' + description),
                     image: item.enclosure?.link || item.thumbnail,
-                    priority: feed.priority
+                    priority: feed.priority,
+                    archived: false
                   };
                 });
               
@@ -340,16 +282,31 @@ const App = () => {
           }
         }
         
-        allArticles.sort((a, b) => {
-          if (a.priority !== b.priority) {
-            return a.priority - b.priority;
+        const combinedArticles = [...allArticles];
+        const newArticleIds = new Set(allArticles.map(a => a.id));
+        
+        archivedArticles.forEach(archived => {
+          if (!newArticleIds.has(archived.id)) {
+            combinedArticles.push({ ...archived, archived: true });
           }
+        });
+        
+        combinedArticles.sort((a, b) => {
+          if (a.archived !== b.archived) return a.archived ? 1 : -1;
+          if (a.priority !== b.priority) return a.priority - b.priority;
           return b.date - a.date;
         });
         
-        setArticles(allArticles);
+        setArticles(combinedArticles);
         
-        if (allArticles.length === 0) {
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        const articlesToArchive = combinedArticles
+          .filter(a => new Date(a.date) > sevenDaysAgo)
+          .slice(0, 200);
+        
+        localStorage.setItem('archivedArticles', JSON.stringify(articlesToArchive));
+        
+        if (combinedArticles.length === 0) {
           setError('No AI architecture articles found. Please try again later.');
         }
         
@@ -362,12 +319,10 @@ const App = () => {
     };
 
     fetchArticles();
-    
     const interval = setInterval(fetchArticles, 30 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
-  // Load saved articles from localStorage on mount
   useEffect(() => {
     const saved = localStorage.getItem('savedArticles');
     if (saved) {
@@ -379,14 +334,12 @@ const App = () => {
     }
   }, []);
 
-  // Dynamically generate categories from actual articles
   const categories = ['all', ...new Set(articles.map(a => a.category).filter(Boolean))].sort();
-
   const sources = ['all', ...new Set(articles.map(a => a.source))].filter(Boolean);
 
   const getCategoryData = () => {
     const categoryCount = {};
-    articles.forEach(article => {
+    articles.filter(a => !a.archived).forEach(article => {
       if (article.category) {
         categoryCount[article.category] = (categoryCount[article.category] || 0) + 1;
       }
@@ -401,14 +354,7 @@ const App = () => {
 
   const getRelativeTime = (date) => {
     const seconds = Math.floor((new Date() - date) / 1000);
-    const intervals = {
-      year: 31536000,
-      month: 2592000,
-      week: 604800,
-      day: 86400,
-      hour: 3600,
-      minute: 60
-    };
+    const intervals = { year: 31536000, month: 2592000, week: 604800, day: 86400, hour: 3600, minute: 60 };
 
     for (const [unit, secondsInUnit] of Object.entries(intervals)) {
       const interval = Math.floor(seconds / secondsInUnit);
@@ -428,10 +374,11 @@ const App = () => {
     localStorage.setItem('savedArticles', JSON.stringify(newSavedArticles));
   };
 
-  // Filter articles based on active tab
   const displayArticles = activeTab === 'saved' 
     ? articles.filter(article => savedArticles.includes(article.id))
-    : articles;
+    : activeTab === 'archive'
+    ? articles.filter(article => article.archived)
+    : articles.filter(article => !article.archived);
 
   const filteredArticles = displayArticles.filter(article => {
     const matchesSearch = article.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -442,7 +389,7 @@ const App = () => {
     return matchesSearch && matchesCategory && matchesSource;
   }).sort((a, b) => sortBy === 'date' ? b.date - a.date : b.trending - a.trending);
 
-  const trendingCount = articles.filter(a => a.trending).length;
+  const trendingCount = articles.filter(a => a.trending && !a.archived).length;
 
   if (loading) {
     return (
@@ -487,7 +434,7 @@ const App = () => {
               <div>
                 <h1 className={'text-2xl font-bold ' + (darkMode ? 'text-white' : 'text-gray-900')}>AI in Architecture</h1>
                 <p className={'text-sm ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
-                  {articles.length} articles · {trendingCount} trending · {savedArticles.length} saved
+                  {articles.filter(a => !a.archived).length} articles · {trendingCount} trending · {savedArticles.length} saved
                 </p>
               </div>
             </div>
@@ -508,26 +455,35 @@ const App = () => {
             </div>
           </div>
 
-          {/* Tabs for All / Saved */}
-          <div className="flex gap-2 mb-4">
+          <div className="flex gap-2 mb-4 overflow-x-auto">
             <button
               onClick={() => setActiveTab('all')}
-              className={'px-4 py-2 rounded-lg font-medium transition ' + (activeTab === 'all' 
+              className={'px-4 py-2 rounded-lg font-medium transition whitespace-nowrap ' + (activeTab === 'all' 
                 ? (darkMode ? 'bg-blue-500 text-white' : 'bg-blue-600 text-white')
                 : (darkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white border text-gray-700 hover:bg-gray-50')
               )}
             >
-              All Articles ({articles.length})
+              Recent ({articles.filter(a => !a.archived).length})
             </button>
             <button
               onClick={() => setActiveTab('saved')}
-              className={'px-4 py-2 rounded-lg font-medium transition flex items-center gap-2 ' + (activeTab === 'saved'
+              className={'px-4 py-2 rounded-lg font-medium transition flex items-center gap-2 whitespace-nowrap ' + (activeTab === 'saved'
                 ? (darkMode ? 'bg-blue-500 text-white' : 'bg-blue-600 text-white')
                 : (darkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white border text-gray-700 hover:bg-gray-50')
               )}
             >
               <Heart className="w-4 h-4" fill={activeTab === 'saved' ? 'currentColor' : 'none'} />
               Saved ({savedArticles.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('archive')}
+              className={'px-4 py-2 rounded-lg font-medium transition flex items-center gap-2 whitespace-nowrap ' + (activeTab === 'archive'
+                ? (darkMode ? 'bg-blue-500 text-white' : 'bg-blue-600 text-white')
+                : (darkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white border text-gray-700 hover:bg-gray-50')
+              )}
+            >
+              <Archive className="w-4 h-4" />
+              Archive ({articles.filter(a => a.archived).length})
             </button>
           </div>
 
@@ -556,7 +512,7 @@ const App = () => {
 
           {showFilters && (
             <div className={'mt-4 p-4 rounded-xl ' + (darkMode ? 'bg-gray-800' : 'bg-white border')}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className={'block text-sm font-medium mb-2 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>Category</label>
                   <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}
@@ -569,6 +525,14 @@ const App = () => {
                   <select value={selectedSource} onChange={(e) => setSelectedSource(e.target.value)}
                     className={'w-full px-3 py-2 rounded-lg border ' + (darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300')}>
                     {sources.map(s => <option key={s} value={s}>{s === 'all' ? 'All Sources' : s}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={'block text-sm font-medium mb-2 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>Sort By</label>
+                  <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
+                    className={'w-full px-3 py-2 rounded-lg border ' + (darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300')}>
+                    <option value="date">Latest First</option>
+                    <option value="trending">Trending</option>
                   </select>
                 </div>
               </div>
@@ -588,14 +552,9 @@ const App = () => {
             </div>
             <div className={'p-5 rounded-xl border ' + (darkMode ? 'bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-blue-500/30' : 'bg-gradient-to-br from-blue-50 to-purple-50 border-blue-200')}>
               <p className={'text-sm leading-relaxed ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>
-                Displaying {articles.length} curated articles on AI in Architecture. Categories include: <strong>Design Process, AI Tools, Rendering & Visualization, Case Studies, Generative Design, Machine Learning, BIM, and Construction Tech</strong>. 
-                Articles refresh every 30 minutes from top sources.
+                Displaying {articles.filter(a => !a.archived).length} recent articles with {articles.filter(a => a.archived).length} archived. Categories include: <strong>Design Process, AI Tools, Rendering & Visualization, Case Studies, Generative Design, Machine Learning, BIM, and Construction Tech</strong>. 
+                Articles refresh every 30 minutes and are archived after 7 days for future retrieval.
               </p>
-              <div className="flex flex-wrap gap-2 mt-3">
-                {categories.slice(1, 7).map((cat, idx) => (
-                  <span key={idx} className={'px-2 py-1 rounded text-xs ' + (darkMode ? 'bg-blue-500/20 text-blue-300' : 'bg-blue-100 text-blue-700')}>{cat}</span>
-                ))}
-              </div>
             </div>
           </div>
         )}
@@ -623,7 +582,15 @@ const App = () => {
           </div>
         )}
 
-        {activeTab === 'all' && showChart && chartData.length > 0 ? (
+        {activeTab === 'archive' && articles.filter(a => a.archived).length === 0 && (
+          <div className={'text-center py-16 ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
+            <Archive className="w-16 h-16 mx-auto mb-4 opacity-50" />
+            <p className="text-xl">No archived articles yet</p>
+            <p className="text-sm mt-2">Articles older than 7 days will appear here</p>
+          </div>
+        )}
+
+        {activeTab === 'all' && showChart && chartData.length > 0 && (
           <div className={'mb-8 p-6 rounded-xl border ' + (darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
             <div className="flex items-center justify-between mb-4">
               <h2 className={'text-lg font-bold ' + (darkMode ? 'text-white' : 'text-gray-900')}>Articles by Category</h2>
@@ -641,7 +608,9 @@ const App = () => {
               </BarChart>
             </ResponsiveContainer>
           </div>
-        ) : activeTab === 'all' && !showChart && (
+        )}
+
+        {activeTab === 'all' && !showChart && (
           <div className="mb-8">
             <button onClick={() => setShowChart(true)}
               className={'flex items-center gap-2 px-4 py-2 rounded-lg font-medium hover:scale-105 transition ' + (darkMode ? 'bg-gray-800 text-blue-400 hover:bg-gray-700 border border-gray-700' : 'bg-white text-blue-700 hover:bg-gray-50 border border-gray-200')}>
@@ -662,6 +631,12 @@ const App = () => {
                   <Bookmark className="w-5 h-5" fill={savedArticles.includes(article.id) ? 'currentColor' : 'none'} />
                 </button>
               </div>
+              {article.archived && (
+                <div className={'mb-2 px-2 py-1 rounded text-xs inline-block ' + (darkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-600')}>
+                  <Archive className="w-3 h-3 inline mr-1" />
+                  Archived
+                </div>
+              )}
               <h2 className={'text-base font-bold mb-3 line-clamp-2 group-hover:text-blue-500 transition ' + (darkMode ? 'text-white' : 'text-gray-900')}>{article.title}</h2>
               <p className={'text-sm mb-4 line-clamp-3 ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>{article.summary}</p>
               {article.keywords.length > 0 && (
@@ -695,7 +670,7 @@ const App = () => {
           </div>
         )}
 
-        {filteredArticles.length === 0 && !loading && activeTab === 'all' && (
+        {filteredArticles.length === 0 && !loading && (activeTab === 'all' || activeTab === 'saved') && savedArticles.length > 0 && (
           <div className={'text-center py-16 ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
             <Building2 className="w-16 h-16 mx-auto mb-4 opacity-50" />
             <p className="text-xl">No articles found</p>
