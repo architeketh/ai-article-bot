@@ -17,10 +17,6 @@ const App = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('all');
-  const [showManualSearch, setShowManualSearch] = useState(false);
-  const [manualSearchQuery, setManualSearchQuery] = useState('');
-  const [manualSearchResults, setManualSearchResults] = useState([]);
-  const [searchingManually, setSearchingManually] = useState(false);
 
   const RSS_FEEDS = [
     {
@@ -219,93 +215,40 @@ const App = () => {
     return foundKeywords.slice(0, 4);
   };
 
-  // Manual web search for articles
-  const searchWebForArticles = async (query) => {
-    if (!query.trim()) return;
+  const addArticleByURL = () => {
+    const url = prompt('Enter the article URL:');
+    if (!url || !url.trim()) return;
     
-    setSearchingManually(true);
-    setManualSearchResults([]);
+    const title = prompt('Enter article title:');
+    if (!title || !title.trim()) return;
     
-    try {
-      const searchQuery = query + ' architecture AI design';
-      const newsApiKey = '7f6917ebf4fa44af924a6e4d39a0dcd3';
-      
-      const response = await fetch(
-        'https://newsapi.org/v2/everything?q=' + encodeURIComponent(searchQuery) + '&language=en&sortBy=publishedAt&pageSize=20&apiKey=' + newsApiKey
-      );
-      
-      const data = await response.json();
-      
-      if (data.articles) {
-        const results = data.articles.slice(0, 15).map((item, index) => ({
-          id: 'manual-' + Date.now() + '-' + index,
-          title: item.title || 'Untitled',
-          source: item.source?.name || 'Web Search',
-          sourceLogo: '🔍',
-          category: 'Manual Addition',
-          date: new Date(item.publishedAt || Date.now()),
-          readTime: 5,
-          summary: item.description || item.content?.substring(0, 200) || 'No description available',
-          url: item.url,
-          trending: false,
-          keywords: [],
-          image: item.urlToImage,
-          priority: 1,
-          archived: false,
-          manual: true,
-          approved: false
-        }));
-        
-        setManualSearchResults(results);
-      } else {
-        alert('No results found or API error: ' + (data.message || 'Unknown error'));
-      }
-    } catch (error) {
-      console.error('Error searching web:', error);
-      alert('Error searching for articles. Please try again.');
-    } finally {
-      setSearchingManually(false);
-    }
-  };
-
-  // Add manual article to main list
-  const approveAndAddArticle = (article) => {
-    const categorized = {
-      ...article,
-      id: article.url || article.id,
-      category: categorizeArticle(article.title, article.summary, 'Manual Addition'),
-      keywords: extractKeywords(article.title + ' ' + article.summary),
-      approved: true,
+    const summary = prompt('Enter a brief summary (optional):') || 'No description provided';
+    
+    const newArticle = {
+      id: url,
+      title: title,
+      source: 'Manual Addition',
+      sourceLogo: '📌',
+      category: categorizeArticle(title, summary, 'Manual Addition'),
+      date: new Date(),
+      readTime: 5,
+      summary: summary,
+      url: url,
+      trending: false,
+      keywords: extractKeywords(title + ' ' + summary),
+      priority: 1,
+      archived: false,
       manual: true
     };
     
-    setArticles(prev => [categorized, ...prev]);
+    setArticles(prev => [newArticle, ...prev]);
     
-    // Add article by URL
-const addArticleByURL = async (url) => {
-  if (!url.trim()) {
-    alert('Please enter a valid URL');
-    return;
-  }
-  
-  setSearchingManually(true);
-  
-  try {
-    // Use RSS2JSON to fetch the article
-    const response = await fetch(
-      'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(url) + '&api_key=q1ihf2w1uk1uwljssn3dngzhms9ajhqjpzfpqgf4'
-    );
+    const manualArticles = JSON.parse(localStorage.getItem('manualArticles') || '[]');
+    manualArticles.push(newArticle);
+    localStorage.setItem('manualArticles', JSON.stringify(manualArticles));
     
-    const data = await response.json();
-    
-    if (data.status === 'ok' && data.items && data.items.length > 0) {
-      // Show the article for approval
-      const item = data.items[0];
-      const article = {
-        id: 'manual-' + Date.now(),
-        title: item.title || 'Untitled',
-        source: data.feed?.title || 'Manual Addition',
-        sourceLogo: '
+    alert('Article added successfully!');
+  };
 
   useEffect(() => {
     const fetchArticles = async () => {
@@ -590,10 +533,10 @@ const addArticleByURL = async (url) => {
               className={'w-full pl-10 pr-32 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (darkMode ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900')} 
             />
             <button
-              onClick={() => setShowManualSearch(true)}
+              onClick={addArticleByURL}
               className={'absolute right-2 top-1/2 transform -translate-y-1/2 px-4 py-1.5 rounded-lg text-sm font-medium transition ' + (darkMode ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-blue-600 text-white hover:bg-blue-700')}
             >
-              + Add New
+              + Add Article
             </button>
           </div>
 
@@ -640,106 +583,6 @@ const addArticleByURL = async (url) => {
         </div>
       </header>
 
-      {/* Manual Search Modal */}
-      {showManualSearch && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowManualSearch(false)}>
-          <div className={'max-w-4xl w-full max-h-[90vh] overflow-auto rounded-xl ' + (darkMode ? 'bg-gray-800' : 'bg-white')} onClick={(e) => e.stopPropagation()}>
-            <div className={'sticky top-0 p-6 border-b ' + (darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className={'text-2xl font-bold ' + (darkMode ? 'text-white' : 'text-gray-900')}>
-                  Search & Add Articles
-                </h2>
-                <button 
-                  onClick={() => {
-                    setShowManualSearch(false);
-                    setManualSearchQuery('');
-                    setManualSearchResults([]);
-                  }}
-                  className={'p-2 rounded-lg ' + (darkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-600')}
-                >
-                  ✕
-                </button>
-              </div>
-              
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Search for articles (e.g., 'AI rendering tools', 'parametric design')"
-                  value={manualSearchQuery}
-                  onChange={(e) => setManualSearchQuery(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && searchWebForArticles(manualSearchQuery)}
-                  className={'flex-1 px-4 py-3 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300')}
-                />
-                <button
-                  onClick={() => searchWebForArticles(manualSearchQuery)}
-                  disabled={searchingManually}
-                  className={'px-6 py-3 rounded-lg font-medium transition ' + (darkMode ? 'bg-blue-500 text-white hover:bg-blue-600 disabled:bg-gray-600' : 'bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-400')}
-                >
-                  {searchingManually ? 'Searching...' : 'Search'}
-                </button>
-              </div>
-              
-              <p className={'text-sm mt-2 ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
-                Search the web for articles on AI in architecture and add them to your collection
-              </p>
-            </div>
-            
-            <div className="p-6">
-              {searchingManually && (
-                <div className="text-center py-8">
-                  <RefreshCw className={'w-8 h-8 animate-spin mx-auto mb-2 ' + (darkMode ? 'text-blue-400' : 'text-blue-600')} />
-                  <p className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Searching the web...</p>
-                </div>
-              )}
-              
-              {manualSearchResults.length > 0 && (
-                <div className="space-y-4">
-                  <h3 className={'text-lg font-bold mb-4 ' + (darkMode ? 'text-white' : 'text-gray-900')}>
-                    Found {manualSearchResults.length} articles
-                  </h3>
-                  {manualSearchResults.map(article => (
-                    <div key={article.id} className={'p-4 rounded-lg border ' + (darkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-200')}>
-                      <div className="flex justify-between items-start gap-4">
-                        <div className="flex-1">
-                          <h4 className={'font-bold mb-2 ' + (darkMode ? 'text-white' : 'text-gray-900')}>{article.title}</h4>
-                          <p className={'text-sm mb-2 line-clamp-2 ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>{article.summary}</p>
-                          <div className="flex items-center gap-4 text-xs">
-                            <span className={darkMode ? 'text-gray-500' : 'text-gray-500'}>{article.source}</span>
-                            <span className={darkMode ? 'text-gray-500' : 'text-gray-500'}>{getRelativeTime(article.date)}</span>
-                            <a href={article.url} target="_blank" rel="noopener noreferrer" className={'flex items-center gap-1 ' + (darkMode ? 'text-blue-400' : 'text-blue-600')}>
-                              Preview <ExternalLink className="w-3 h-3" />
-                            </a>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => approveAndAddArticle(article)}
-                          className={'px-4 py-2 rounded-lg font-medium transition whitespace-nowrap ' + (darkMode ? 'bg-green-500 text-white hover:bg-green-600' : 'bg-green-600 text-white hover:bg-green-700')}
-                        >
-                          + Add
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              
-              {!searchingManually && manualSearchResults.length === 0 && manualSearchQuery && (
-                <div className={'text-center py-8 ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
-                  <p>No results found. Try a different search term.</p>
-                </div>
-              )}
-              
-              {!searchingManually && manualSearchResults.length === 0 && !manualSearchQuery && (
-                <div className={'text-center py-8 ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
-                  <Search className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p>Enter a search term to find articles</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {activeTab === 'all' && showWeeklySummary && (
           <div className="mb-8">
@@ -751,7 +594,7 @@ const addArticleByURL = async (url) => {
             </div>
             <div className={'p-5 rounded-xl border ' + (darkMode ? 'bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-blue-500/30' : 'bg-gradient-to-br from-blue-50 to-purple-50 border-blue-200')}>
               <p className={'text-sm leading-relaxed ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>
-                Displaying {articles.filter(a => !a.archived).length} recent articles with {articles.filter(a => a.archived).length} archived. Click <strong>"+ Add New"</strong> to search and manually add articles from the web. 
+                Displaying {articles.filter(a => !a.archived).length} recent articles with {articles.filter(a => a.archived).length} archived. Click <strong>"+ Add Article"</strong> to manually add articles by URL. 
                 Articles refresh every 30 minutes and are archived after 7 days.
               </p>
             </div>
@@ -878,7 +721,7 @@ const addArticleByURL = async (url) => {
           </div>
         )}
 
-        {filteredArticles.length === 0 && !loading && (activeTab === 'all' || activeTab === 'saved') && savedArticles.length > 0 && (
+        {filteredArticles.length === 0 && !loading && (
           <div className={'text-center py-16 ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
             <Building2 className="w-16 h-16 mx-auto mb-4 opacity-50" />
             <p className="text-xl">No articles found</p>
