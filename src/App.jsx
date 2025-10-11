@@ -43,27 +43,6 @@ const App = () => {
     source: 'TechCrunch AI',
     logo: '🤖'
   }
-    {
-      url: 'https://techcrunch.com/category/artificial-intelligence/feed/',
-      category: 'AI Technology',
-      source: 'TechCrunch AI',
-      logo: '🤖',
-      priority: 1
-    },
-    {
-      url: 'https://www.technologyreview.com/topic/artificial-intelligence/feed',
-      category: 'AI Research',
-      source: 'MIT Technology Review',
-      logo: '🔬',
-      priority: 1
-    },
-    {
-      url: 'https://venturebeat.com/category/ai/feed/',
-      category: 'AI Industry',
-      source: 'VentureBeat AI',
-      logo: '💼',
-      priority: 2
-    },
 ];
 
   // Fetch articles from RSS feeds
