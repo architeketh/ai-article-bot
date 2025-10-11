@@ -52,7 +52,7 @@ const App = () => {
           try {
             // Using RSS2JSON service to convert RSS to JSON
             const response = await fetch(
-              `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feed.url)}&api_key=YOUR_API_KEY&count=10`
+              `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feed.url)}`
             );
             
             if (!response.ok) throw new Error('Failed to fetch feed');
