@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Bookmark, TrendingUp, Clock, ExternalLink, Moon, Sun, Building2, BarChart3, Calendar, Sparkles, RefreshCw, AlertCircle } from 'lucide-react';
+import { Search, Filter, Bookmark, TrendingUp, Clock, ExternalLink, Moon, Sun, Building2, BarChart3, Calendar, Sparkles, RefreshCw, AlertCircle, Heart } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 const App = () => {
@@ -16,6 +16,7 @@ const App = () => {
   const [articles, setArticles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [activeTab, setActiveTab] = useState('all'); // 'all' or 'saved'
 
   // AI Architecture-focused keywords for filtering
   const AI_ARCHITECTURE_KEYWORDS = [
@@ -31,12 +32,12 @@ const App = () => {
     '3d printing', 'robotic construction', 'prefabrication',
     'sustainable', 'energy efficiency', 'climate',
     'digital twin', 'simulation', 'performance analysis',
-    'design process', 'design tool', 'workflow', 'collaboration'
+    'design process', 'design tool', 'workflow', 'collaboration',
+    'render', '3d', 'vray', 'unreal', 'unity', 'blender'
   ];
 
   // Curated RSS feeds for AI in Architecture
   const RSS_FEEDS = [
-    // Architecture & Design Publications
     {
       url: 'https://www.archdaily.com/feed',
       category: 'Architecture News',
@@ -65,8 +66,6 @@ const App = () => {
       logo: '🏗️',
       priority: 1
     },
-    
-    // AI & Technology News
     {
       url: 'https://techcrunch.com/category/artificial-intelligence/feed/',
       category: 'AI Technology',
@@ -95,8 +94,6 @@ const App = () => {
       logo: '⚡',
       priority: 2
     },
-    
-    // Design & Innovation
     {
       url: 'https://www.fastcompany.com/technology/rss',
       category: 'Innovation & Design',
@@ -111,8 +108,6 @@ const App = () => {
       logo: '🔮',
       priority: 2
     },
-    
-    // Computational Design & Tools
     {
       url: 'https://www.grasshopper3d.com/forum/feed/feed:topics:new',
       category: 'Parametric Tools',
@@ -120,8 +115,6 @@ const App = () => {
       logo: '🦗',
       priority: 1
     },
-    
-    // Construction & BIM
     {
       url: 'https://www.constructiondive.com/feeds/news/',
       category: 'Construction Tech',
@@ -135,37 +128,13 @@ const App = () => {
       source: 'Autodesk Blog',
       logo: '🛠️',
       priority: 2
-    },
-    
-    // Academic & Research
-    {
-      url: 'https://arxiv.org/rss/cs.CV',
-      category: 'Computer Vision',
-      source: 'arXiv CV',
-      logo: '🎓',
-      priority: 3
-    },
-    {
-      url: 'https://arxiv.org/rss/cs.GR',
-      category: 'Graphics Research',
-      source: 'arXiv Graphics',
-      logo: '🖼️',
-      priority: 3
-    },
-    {
-      url: 'https://arxiv.org/rss/cs.AI',
-      category: 'AI Research',
-      source: 'arXiv AI',
-      logo: '🧠',
-      priority: 3
     }
   ];
 
-  // Enhanced relevance checking - more strict for design process articles
+  // Enhanced relevance checking
   const isRelevantArticle = (title, description) => {
     const text = (title + ' ' + description).toLowerCase();
     
-    // High priority: Design process and AI in architecture practice
     const highPriorityPatterns = [
       /ai.*architect/,
       /architect.*ai/,
@@ -178,104 +147,92 @@ const App = () => {
       /architect.*guide.*ai/,
       /firm.*ai/,
       /studio.*ai/,
-      /practice.*ai/
+      /practice.*ai/,
+      /render.*ai/,
+      /ai.*render/,
+      /visualization.*ai/,
+      /ai.*visualization/
     ];
     
     if (highPriorityPatterns.some(pattern => pattern.test(text))) {
       return true;
     }
     
-    // Medium priority: General AI architecture keywords
     const hasAIKeyword = text.match(/\b(ai|artificial intelligence|machine learning|neural)\b/);
-    const hasArchKeyword = text.match(/\b(architect|design|building|construction|bim|parametric|generative)\b/);
+    const hasArchKeyword = text.match(/\b(architect|design|building|construction|bim|parametric|generative|render)\b/);
     
     if (hasAIKeyword && hasArchKeyword) {
       return true;
     }
     
-    // Include specific tools and technologies
-    if (text.match(/midjourney|stable diffusion|dall-e|chatgpt|grasshopper|dynamo|revit.*ai/)) {
+    if (text.match(/midjourney|stable diffusion|dall-e|chatgpt|grasshopper|dynamo|revit.*ai|nerf|gaussian/)) {
       return true;
     }
     
     return false;
   };
 
-  // Enhanced categorization with more granular categories
+  // Enhanced categorization
   const categorizeArticle = (title, description, defaultCategory) => {
     const text = (title + ' ' + description).toLowerCase();
     
-    // Design Process & Practice
     if (text.match(/design process|workflow|collaboration|practice|studio|architect.*use|how.*design/)) {
       return 'Design Process';
     }
     
-    // AI Tools & Software
     if (text.match(/tool|software|app|platform|midjourney|dall-e|stable diffusion|chatgpt|plugin|extension/)) {
       return 'AI Tools';
     }
     
-    // Machine Learning & AI Research
     if (text.match(/machine learning|deep learning|neural network|model training|dataset|research|study/)) {
       return 'Machine Learning';
     }
     
-    // Generative & Parametric Design
     if (text.match(/generative|parametric|computational|algorithm|procedural/)) {
       return 'Generative Design';
     }
     
-    // BIM & Digital Tools
     if (text.match(/bim|revit|archicad|building information|digital.*tool|dynamo/)) {
       return 'BIM & Digital Tools';
     }
     
-    // Rendering & Visualization (more specific)
-    if (text.match(/render|visualization|3d.*visual|photorealistic|vray|lumion|unreal|unity/)) {
+    // Make rendering detection more aggressive
+    if (text.match(/render|rendering|visualization|visuali[sz]e|3d.*visual|photorealistic|vray|lumion|unreal|unity|blender|corona|octane/)) {
       return 'Rendering & Visualization';
     }
     
-    // VR/AR/XR
     if (text.match(/virtual reality|augmented reality|vr|ar|xr|metaverse|immersive/)) {
       return 'VR/AR/XR';
     }
     
-    // Construction & Fabrication
     if (text.match(/construction|fabrication|3d print|robotic|prefab|modular/)) {
       return 'Construction Tech';
     }
     
-    // Sustainability & Performance
     if (text.match(/sustainable|sustainability|energy|climate|environmental|performance.*analysis|simulation/)) {
       return 'Sustainability';
     }
     
-    // Education & Learning
     if (text.match(/education|teaching|learning|course|workshop|tutorial|student|university/)) {
       return 'Education';
     }
     
-    // Hardware & Devices
     if (text.match(/hardware|device|sensor|iot|mobile|tablet|smartphone|wearable/)) {
       return 'Hardware & Devices';
     }
     
-    // Awards & Recognition
     if (text.match(/award|prize|winner|competition|recognition|honor|fellowship/)) {
       return 'Awards & Recognition';
     }
     
-    // Blockchain & Web3
     if (text.match(/blockchain|nft|crypto|web3|smart contract|decentralized/)) {
       return 'Blockchain';
     }
     
-    // Industry Trends
     if (text.match(/trend|future|prediction|forecast|survey|report|analysis|market/)) {
       return 'Trends & Analysis';
     }
     
-    // Case Studies & Projects
     if (text.match(/project|case study|firm|studio.*use|architect.*explain|example|implementation/)) {
       return 'Case Studies';
     }
@@ -283,7 +240,7 @@ const App = () => {
     return defaultCategory;
   };
 
-  // Enhanced keyword extraction with better grouping
+  // Enhanced keyword extraction
   const extractKeywords = (text) => {
     const foundKeywords = [];
     const lowerText = text.toLowerCase();
@@ -293,7 +250,7 @@ const App = () => {
       'stable diffusion': ['stable diffusion', 'diffusion model'],
       'chatgpt': ['chatgpt', 'gpt-4', 'gpt'],
       'generative design': ['generative', 'parametric'],
-      'ai rendering': ['render', 'visualization'],
+      'ai rendering': ['render', 'visualization', 'ai.*render'],
       'bim': ['bim', 'revit', 'building information'],
       'machine learning': ['machine learning', 'ml', 'neural'],
       'design process': ['design process', 'workflow', 'practice'],
@@ -313,7 +270,6 @@ const App = () => {
       }
     }
     
-    // If no specific keywords found, extract from title
     if (foundKeywords.length === 0) {
       const words = lowerText.split(/\W+/)
         .filter(word => word.length > 4 && AI_ARCHITECTURE_KEYWORDS.includes(word));
@@ -409,24 +365,20 @@ const App = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const categories = [
-    'all',
-    'Design Process',
-    'AI Tools', 
-    'Case Studies',
-    'Generative Design',
-    'Machine Learning',
-    'Rendering & Visualization',
-    'BIM & Digital Tools',
-    'Construction Tech',
-    'Trends & Analysis',
-    'Education',
-    'Hardware & Devices',
-    'Awards & Recognition',
-    'VR/AR/XR',
-    'Sustainability',
-    'Blockchain'
-  ];
+  // Load saved articles from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('savedArticles');
+    if (saved) {
+      try {
+        setSavedArticles(JSON.parse(saved));
+      } catch (e) {
+        console.error('Error loading saved articles:', e);
+      }
+    }
+  }, []);
+
+  // Dynamically generate categories from actual articles
+  const categories = ['all', ...new Set(articles.map(a => a.category).filter(Boolean))].sort();
 
   const sources = ['all', ...new Set(articles.map(a => a.source))].filter(Boolean);
 
@@ -466,26 +418,20 @@ const App = () => {
   };
 
   const toggleSave = (articleId) => {
-    setSavedArticles(prev => 
-      prev.includes(articleId) ? 
-        prev.filter(id => id !== articleId) : 
-        [...prev, articleId]
-    );
-    
-    const saved = savedArticles.includes(articleId) 
+    const newSavedArticles = savedArticles.includes(articleId) 
       ? savedArticles.filter(id => id !== articleId)
       : [...savedArticles, articleId];
-    localStorage.setItem('savedArticles', JSON.stringify(saved));
+    
+    setSavedArticles(newSavedArticles);
+    localStorage.setItem('savedArticles', JSON.stringify(newSavedArticles));
   };
 
-  useEffect(() => {
-    const saved = localStorage.getItem('savedArticles');
-    if (saved) {
-      setSavedArticles(JSON.parse(saved));
-    }
-  }, []);
+  // Filter articles based on active tab
+  const displayArticles = activeTab === 'saved' 
+    ? articles.filter(article => savedArticles.includes(article.id))
+    : articles;
 
-  const filteredArticles = articles.filter(article => {
+  const filteredArticles = displayArticles.filter(article => {
     const matchesSearch = article.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
                          article.summary.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          article.keywords.some(kw => kw.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -503,7 +449,7 @@ const App = () => {
           <RefreshCw className={'w-12 h-12 animate-spin mx-auto mb-4 ' + (darkMode ? 'text-blue-400' : 'text-blue-600')} />
           <p className={'text-lg ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>Searching for AI in Architecture articles...</p>
           <p className={'text-sm mt-2 ' + (darkMode ? 'text-gray-500' : 'text-gray-500')}>
-            Looking for: AI Tools, Design Process, Case Studies, Generative Design
+            Looking for: AI Tools, Design Process, Rendering, Case Studies
           </p>
         </div>
       </div>
@@ -560,11 +506,34 @@ const App = () => {
             </div>
           </div>
 
+          {/* Tabs for All / Saved */}
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => setActiveTab('all')}
+              className={'px-4 py-2 rounded-lg font-medium transition ' + (activeTab === 'all' 
+                ? (darkMode ? 'bg-blue-500 text-white' : 'bg-blue-600 text-white')
+                : (darkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white border text-gray-700 hover:bg-gray-50')
+              )}
+            >
+              All Articles ({articles.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('saved')}
+              className={'px-4 py-2 rounded-lg font-medium transition flex items-center gap-2 ' + (activeTab === 'saved'
+                ? (darkMode ? 'bg-blue-500 text-white' : 'bg-blue-600 text-white')
+                : (darkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white border text-gray-700 hover:bg-gray-50')
+              )}
+            >
+              <Heart className="w-4 h-4" fill={activeTab === 'saved' ? 'currentColor' : 'none'} />
+              Saved ({savedArticles.length})
+            </button>
+          </div>
+
           <div className="relative">
             <Search className={'absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 ' + (darkMode ? 'text-gray-500' : 'text-gray-400')} />
             <input 
               type="text" 
-              placeholder="Search: AI Tools, Design Process, Midjourney, Generative..." 
+              placeholder="Search: AI Tools, Design Process, Midjourney, Rendering..." 
               value={searchQuery} 
               onChange={(e) => setSearchQuery(e.target.value)}
               className={'w-full pl-10 pr-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (darkMode ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900')} 
@@ -587,18 +556,17 @@ const App = () => {
             <div className={'mt-4 p-4 rounded-xl ' + (darkMode ? 'bg-gray-800' : 'bg-white border')}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
+                  <label className={'block text-sm font-medium mb-2 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>Category</label>
+                  <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}
+                    className={'w-full px-3 py-2 rounded-lg border ' + (darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300')}>
+                    {categories.map(cat => <option key={cat} value={cat}>{cat === 'all' ? 'All Categories' : cat}</option>)}
+                  </select>
+                </div>
+                <div>
                   <label className={'block text-sm font-medium mb-2 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>Source</label>
                   <select value={selectedSource} onChange={(e) => setSelectedSource(e.target.value)}
                     className={'w-full px-3 py-2 rounded-lg border ' + (darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300')}>
                     {sources.map(s => <option key={s} value={s}>{s === 'all' ? 'All Sources' : s}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className={'block text-sm font-medium mb-2 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>Sort By</label>
-                  <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
-                    className={'w-full px-3 py-2 rounded-lg border ' + (darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300')}>
-                    <option value="date">Latest First</option>
-                    <option value="trending">Trending</option>
                   </select>
                 </div>
               </div>
@@ -608,7 +576,7 @@ const App = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {showWeeklySummary && (
+        {activeTab === 'all' && showWeeklySummary && (
           <div className="mb-8">
             <div className="flex items-center justify-between mb-4">
               <h2 className={'text-xl font-bold flex items-center gap-2 ' + (darkMode ? 'text-white' : 'text-gray-900')}>
@@ -618,31 +586,42 @@ const App = () => {
             </div>
             <div className={'p-5 rounded-xl border ' + (darkMode ? 'bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-blue-500/30' : 'bg-gradient-to-br from-blue-50 to-purple-50 border-blue-200')}>
               <p className={'text-sm leading-relaxed ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>
-                Displaying {articles.length} curated articles on AI in Architecture, including: <strong>Design Process, AI Tools, Case Studies, Generative Design, Machine Learning, BIM Technology, and Construction Innovation</strong>. 
-                Articles are automatically filtered from top architecture and technology sources and refreshed every 30 minutes.
+                Displaying {articles.length} curated articles on AI in Architecture. Categories include: <strong>Design Process, AI Tools, Rendering & Visualization, Case Studies, Generative Design, Machine Learning, BIM, and Construction Tech</strong>. 
+                Articles refresh every 30 minutes from top sources.
               </p>
               <div className="flex flex-wrap gap-2 mt-3">
-                <span className={'px-2 py-1 rounded text-xs ' + (darkMode ? 'bg-blue-500/20 text-blue-300' : 'bg-blue-100 text-blue-700')}>AI Tools</span>
-                <span className={'px-2 py-1 rounded text-xs ' + (darkMode ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-100 text-purple-700')}>Design Process</span>
-                <span className={'px-2 py-1 rounded text-xs ' + (darkMode ? 'bg-pink-500/20 text-pink-300' : 'bg-pink-100 text-pink-700')}>Case Studies</span>
-                <span className={'px-2 py-1 rounded text-xs ' + (darkMode ? 'bg-orange-500/20 text-orange-300' : 'bg-orange-100 text-orange-700')}>Generative</span>
-                <span className={'px-2 py-1 rounded text-xs ' + (darkMode ? 'bg-green-500/20 text-green-300' : 'bg-green-100 text-green-700')}>BIM</span>
-                <span className={'px-2 py-1 rounded text-xs ' + (darkMode ? 'bg-cyan-500/20 text-cyan-300' : 'bg-cyan-100 text-cyan-700')}>Construction</span>
+                {categories.slice(1, 7).map((cat, idx) => (
+                  <span key={idx} className={'px-2 py-1 rounded text-xs ' + (darkMode ? 'bg-blue-500/20 text-blue-300' : 'bg-blue-100 text-blue-700')}>{cat}</span>
+                ))}
               </div>
             </div>
           </div>
         )}
 
-       {!showWeeklySummary && (
-  <div className="mb-8">
-    <button onClick={() => setShowWeeklySummary(true)}
-      className={'flex items-center gap-2 px-4 py-2 rounded-lg font-medium hover:scale-105 transition ' + (darkMode ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/30' : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200')}>
-      <Sparkles className="w-4 h-4" />Show AI Architecture Insights
-    </button>
-  </div>
-)}
+        {activeTab === 'all' && !showWeeklySummary && (
+          <div className="mb-8">
+            <button onClick={() => setShowWeeklySummary(true)}
+              className={'flex items-center gap-2 px-4 py-2 rounded-lg font-medium hover:scale-105 transition ' + (darkMode ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/30' : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200')}>
+              <Sparkles className="w-4 h-4" />Show AI Architecture Insights
+            </button>
+          </div>
+        )}
 
-        {showChart && chartData.length > 0 ? (
+        {activeTab === 'saved' && savedArticles.length === 0 && (
+          <div className={'text-center py-16 ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
+            <Heart className="w-16 h-16 mx-auto mb-4 opacity-50" />
+            <p className="text-xl">No saved articles yet</p>
+            <p className="text-sm mt-2">Bookmark articles to read them later</p>
+            <button
+              onClick={() => setActiveTab('all')}
+              className={'mt-4 px-6 py-2 rounded-lg font-medium transition ' + (darkMode ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-blue-600 text-white hover:bg-blue-700')}
+            >
+              Browse Articles
+            </button>
+          </div>
+        )}
+
+        {activeTab === 'all' && showChart && chartData.length > 0 ? (
           <div className={'mb-8 p-6 rounded-xl border ' + (darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
             <div className="flex items-center justify-between mb-4">
               <h2 className={'text-lg font-bold ' + (darkMode ? 'text-white' : 'text-gray-900')}>Articles by Category</h2>
@@ -660,7 +639,7 @@ const App = () => {
               </BarChart>
             </ResponsiveContainer>
           </div>
-        ) : !showChart && (
+        ) : activeTab === 'all' && !showChart && (
           <div className="mb-8">
             <button onClick={() => setShowChart(true)}
               className={'flex items-center gap-2 px-4 py-2 rounded-lg font-medium hover:scale-105 transition ' + (darkMode ? 'bg-gray-800 text-blue-400 hover:bg-gray-700 border border-gray-700' : 'bg-white text-blue-700 hover:bg-gray-50 border border-gray-200')}>
@@ -714,10 +693,10 @@ const App = () => {
           </div>
         )}
 
-        {filteredArticles.length === 0 && !loading && (
+        {filteredArticles.length === 0 && !loading && activeTab === 'all' && (
           <div className={'text-center py-16 ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
             <Building2 className="w-16 h-16 mx-auto mb-4 opacity-50" />
-            <p className="text-xl">No AI architecture articles found</p>
+            <p className="text-xl">No articles found</p>
             <p className="text-sm mt-2">Try adjusting your search or filters</p>
           </div>
         )}
