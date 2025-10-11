@@ -33,96 +33,336 @@ const App = () => {
     'digital twin', 'simulation', 'performance analysis'
   ];
 
-  // Curated RSS feeds for AI in Architecture
-  const RSS_FEEDS = [
-    // Architecture & Design Publications
-    {
-      url: 'https://www.archdaily.com/feed',
-      category: 'Architecture News',
-      source: 'ArchDaily',
-      logo: '🏛️',
-      priority: 1
-    },
-    {
-      url: 'https://www.dezeen.com/feed/',
-      category: 'Design & Technology',
-      source: 'Dezeen',
-      logo: '📐',
-      priority: 1
-    },
-    {
-      url: 'https://www.architectmagazine.com/rss',
-      category: 'Architecture Practice',
-      source: 'Architect Magazine',
-      logo: '📰',
-      priority: 2
-    },
-    {
-      url: 'https://architizer.com/blog/feed/',
-      category: 'Architecture Blog',
-      source: 'Architizer',
-      logo: '🏗️',
-      priority: 2
-    },
-    
-    // AI & Technology
-    {
-      url: 'https://techcrunch.com/category/artificial-intelligence/feed/',
-      category: 'AI Technology',
-      source: 'TechCrunch AI',
-      logo: '🤖',
-      priority: 1
-    },
-    {
-      url: 'https://www.technologyreview.com/topic/artificial-intelligence/feed',
-      category: 'AI Research',
-      source: 'MIT Technology Review',
-      logo: '🔬',
-      priority: 1
-    },
-    {
-      url: 'https://venturebeat.com/category/ai/feed/',
-      category: 'AI Industry',
-      source: 'VentureBeat AI',
-      logo: '💼',
-      priority: 2
-    },
-    
-    // Computational Design & Parametric
-    {
-      url: 'https://www.grasshopper3d.com/forum/feed/feed:topics:new',
-      category: 'Parametric Design',
-      source: 'Grasshopper3D Forum',
-      logo: '🦗',
-      priority: 1
-    },
-    
-    // BIM & Construction Tech
-    {
-      url: 'https://www.constructiondive.com/feeds/news/',
-      category: 'Construction Technology',
-      source: 'Construction Dive',
-      logo: '👷',
-      priority: 2
-    },
-    
-    // Academic & Research
-    {
-      url: 'https://arxiv.org/rss/cs.CV',
-      category: 'Computer Vision Research',
-      source: 'arXiv CV',
-      logo: '🎓',
-      priority: 2
-    },
-    {
-      url: 'https://arxiv.org/rss/cs.GR',
-      category: 'Graphics Research',
-      source: 'arXiv Graphics',
-      logo: '🖼️',
-      priority: 2
-    }
-  ];
+ // AI Architecture-focused keywords for filtering
+const AI_ARCHITECTURE_KEYWORDS = [
+  'ai', 'artificial intelligence', 'machine learning', 'neural network', 'deep learning',
+  'generative design', 'generative', 'parametric', 'computational design',
+  'bim', 'building information modeling', 'revit', 'archicad',
+  'rendering', 'visualization', 'midjourney', 'stable diffusion', 'dall-e',
+  'algorithm', 'optimization', 'automation', 'digital fabrication',
+  'blockchain', 'smart contract', 'nft',
+  'grasshopper', 'rhino', 'dynamo',
+  'gpt', 'chatgpt', 'claude', 'llm',
+  'nerf', 'gaussian splatting', 'photogrammetry',
+  '3d printing', 'robotic construction', 'prefabrication',
+  'sustainable', 'energy efficiency', 'climate',
+  'digital twin', 'simulation', 'performance analysis',
+  'design process', 'design tool', 'workflow', 'collaboration'
+];
 
+// Curated RSS feeds for AI in Architecture
+const RSS_FEEDS = [
+  // Architecture & Design Publications
+  {
+    url: 'https://www.archdaily.com/feed',
+    category: 'Architecture News',
+    source: 'ArchDaily',
+    logo: '🏛️',
+    priority: 1
+  },
+  {
+    url: 'https://www.dezeen.com/feed/',
+    category: 'Design Innovation',
+    source: 'Dezeen',
+    logo: '📐',
+    priority: 1
+  },
+  {
+    url: 'https://www.architectmagazine.com/rss',
+    category: 'Practice & Technology',
+    source: 'Architect Magazine',
+    logo: '📰',
+    priority: 1
+  },
+  {
+    url: 'https://architizer.com/blog/feed/',
+    category: 'Architecture Blog',
+    source: 'Architizer',
+    logo: '🏗️',
+    priority: 1
+  },
+  {
+    url: 'https://www.archdaily.com/tag/artificial-intelligence',
+    category: 'AI in Architecture',
+    source: 'ArchDaily AI',
+    logo: '🤖',
+    priority: 1
+  },
+  
+  // AI & Technology News
+  {
+    url: 'https://techcrunch.com/category/artificial-intelligence/feed/',
+    category: 'AI Technology',
+    source: 'TechCrunch AI',
+    logo: '💻',
+    priority: 2
+  },
+  {
+    url: 'https://www.technologyreview.com/topic/artificial-intelligence/feed',
+    category: 'AI Research',
+    source: 'MIT Technology Review',
+    logo: '🔬',
+    priority: 2
+  },
+  {
+    url: 'https://venturebeat.com/category/ai/feed/',
+    category: 'AI Industry',
+    source: 'VentureBeat AI',
+    logo: '💼',
+    priority: 2
+  },
+  {
+    url: 'https://www.theverge.com/ai-artificial-intelligence/rss/index.xml',
+    category: 'AI & Design Tech',
+    source: 'The Verge AI',
+    logo: '⚡',
+    priority: 2
+  },
+  
+  // Design & Innovation
+  {
+    url: 'https://www.fastcompany.com/technology/rss',
+    category: 'Innovation & Design',
+    source: 'Fast Company Tech',
+    logo: '🚀',
+    priority: 1
+  },
+  {
+    url: 'https://www.wired.com/feed/tag/ai/latest/rss',
+    category: 'AI Culture',
+    source: 'Wired AI',
+    logo: '🔮',
+    priority: 2
+  },
+  
+  // Computational Design & Tools
+  {
+    url: 'https://www.grasshopper3d.com/forum/feed/feed:topics:new',
+    category: 'Parametric Tools',
+    source: 'Grasshopper3D',
+    logo: '🦗',
+    priority: 1
+  },
+  
+  // Construction & BIM
+  {
+    url: 'https://www.constructiondive.com/feeds/news/',
+    category: 'Construction Tech',
+    source: 'Construction Dive',
+    logo: '👷',
+    priority: 2
+  },
+  {
+    url: 'https://www.autodesk.com/blogs/feed/',
+    category: 'Design Software',
+    source: 'Autodesk Blog',
+    logo: '🛠️',
+    priority: 2
+  },
+  
+  // Academic & Research
+  {
+    url: 'https://arxiv.org/rss/cs.CV',
+    category: 'Computer Vision',
+    source: 'arXiv CV',
+    logo: '🎓',
+    priority: 3
+  },
+  {
+    url: 'https://arxiv.org/rss/cs.GR',
+    category: 'Graphics Research',
+    source: 'arXiv Graphics',
+    logo: '🖼️',
+    priority: 3
+  },
+  {
+    url: 'https://arxiv.org/rss/cs.AI',
+    category: 'AI Research',
+    source: 'arXiv AI',
+    logo: '🧠',
+    priority: 3
+  }
+];
+
+// Enhanced categorization with more granular categories
+const categorizeArticle = (title, description, defaultCategory) => {
+  const text = (title + ' ' + description).toLowerCase();
+  
+  // Design Process & Practice
+  if (text.match(/design process|workflow|collaboration|practice|studio|architect.*use|how.*design/)) {
+    return 'Design Process';
+  }
+  
+  // AI Tools & Software
+  if (text.match(/tool|software|app|platform|midjourney|dall-e|stable diffusion|chatgpt|plugin|extension/)) {
+    return 'AI Tools';
+  }
+  
+  // Machine Learning & AI Research
+  if (text.match(/machine learning|deep learning|neural network|model training|dataset|research|study/)) {
+    return 'Machine Learning';
+  }
+  
+  // Generative & Parametric Design
+  if (text.match(/generative|parametric|computational|algorithm|procedural/)) {
+    return 'Generative Design';
+  }
+  
+  // BIM & Digital Tools
+  if (text.match(/bim|revit|archicad|building information|digital.*tool|dynamo/)) {
+    return 'BIM & Digital Tools';
+  }
+  
+  // Rendering & Visualization (more specific)
+  if (text.match(/render|visualization|3d.*visual|photorealistic|vray|lumion|unreal|unity/)) {
+    return 'Rendering & Visualization';
+  }
+  
+  // VR/AR/XR
+  if (text.match(/virtual reality|augmented reality|vr|ar|xr|metaverse|immersive/)) {
+    return 'VR/AR/XR';
+  }
+  
+  // Construction & Fabrication
+  if (text.match(/construction|fabrication|3d print|robotic|prefab|modular/)) {
+    return 'Construction Tech';
+  }
+  
+  // Sustainability & Performance
+  if (text.match(/sustainable|sustainability|energy|climate|environmental|performance.*analysis|simulation/)) {
+    return 'Sustainability';
+  }
+  
+  // Education & Learning
+  if (text.match(/education|teaching|learning|course|workshop|tutorial|student|university/)) {
+    return 'Education';
+  }
+  
+  // Hardware & Devices
+  if (text.match(/hardware|device|sensor|iot|mobile|tablet|smartphone|wearable/)) {
+    return 'Hardware & Devices';
+  }
+  
+  // Awards & Recognition
+  if (text.match(/award|prize|winner|competition|recognition|honor|fellowship/)) {
+    return 'Awards & Recognition';
+  }
+  
+  // Blockchain & Web3
+  if (text.match(/blockchain|nft|crypto|web3|smart contract|decentralized/)) {
+    return 'Blockchain';
+  }
+  
+  // Industry Trends
+  if (text.match(/trend|future|prediction|forecast|survey|report|analysis|market/)) {
+    return 'Trends & Analysis';
+  }
+  
+  // Case Studies & Projects
+  if (text.match(/project|case study|firm|studio.*use|architect.*explain|example|implementation/)) {
+    return 'Case Studies';
+  }
+  
+  return defaultCategory;
+};
+const categories = [
+  'all',
+  'Design Process',
+  'AI Tools', 
+  'Case Studies',
+  'Generative Design',
+  'Machine Learning',
+  'Rendering & Visualization',
+  'BIM & Digital Tools',
+  'Construction Tech',
+  'Trends & Analysis',
+  'Education',
+  'Hardware & Devices',
+  'Awards & Recognition',
+  'VR/AR/XR',
+  'Sustainability',
+  'Blockchain'
+];
+  
+// Enhanced keyword extraction with better grouping
+const extractKeywords = (text) => {
+  const foundKeywords = [];
+  const lowerText = text.toLowerCase();
+  
+  const keywordGroups = {
+    'midjourney': ['midjourney'],
+    'stable diffusion': ['stable diffusion', 'diffusion model'],
+    'chatgpt': ['chatgpt', 'gpt-4', 'gpt'],
+    'generative design': ['generative', 'parametric'],
+    'ai rendering': ['render', 'visualization'],
+    'bim': ['bim', 'revit', 'building information'],
+    'machine learning': ['machine learning', 'ml', 'neural'],
+    'design process': ['design process', 'workflow', 'practice'],
+    'computational': ['algorithm', 'computational', 'optimization'],
+    'blockchain': ['blockchain', 'nft', 'smart contract'],
+    'digital twin': ['digital twin', 'simulation'],
+    'vr/ar': ['virtual reality', 'augmented reality', 'vr', 'ar'],
+    '3d printing': ['3d print', 'additive manufacturing'],
+    'grasshopper': ['grasshopper', 'rhino'],
+    'sustainability': ['sustainable', 'energy', 'climate'],
+    'education': ['education', 'learning', 'course']
+  };
+  
+  for (const [label, keywords] of Object.entries(keywordGroups)) {
+    if (keywords.some(kw => lowerText.includes(kw))) {
+      foundKeywords.push(label);
+    }
+  }
+  
+  // If no specific keywords found, extract from title
+  if (foundKeywords.length === 0) {
+    const words = lowerText.split(/\W+/)
+      .filter(word => word.length > 4 && AI_ARCHITECTURE_KEYWORDS.includes(word));
+    foundKeywords.push(...words.slice(0, 3));
+  }
+  
+  return foundKeywords.slice(0, 4);
+};
+
+// Enhanced relevance checking - more strict for design process articles
+const isRelevantArticle = (title, description) => {
+  const text = (title + ' ' + description).toLowerCase();
+  
+  // High priority: Design process and AI in architecture practice
+  const highPriorityPatterns = [
+    /ai.*architect/,
+    /architect.*ai/,
+    /generative.*design/,
+    /design.*process.*ai/,
+    /ai.*design.*tool/,
+    /midjourney.*architect/,
+    /stable diffusion.*design/,
+    /ai.*transform.*architect/,
+    /architect.*guide.*ai/,
+    /firm.*ai/,
+    /studio.*ai/,
+    /practice.*ai/
+  ];
+  
+  if (highPriorityPatterns.some(pattern => pattern.test(text))) {
+    return true;
+  }
+  
+  // Medium priority: General AI architecture keywords
+  const hasAIKeyword = text.match(/\b(ai|artificial intelligence|machine learning|neural)\b/);
+  const hasArchKeyword = text.match(/\b(architect|design|building|construction|bim|parametric|generative)\b/);
+  
+  if (hasAIKeyword && hasArchKeyword) {
+    return true;
+  }
+  
+  // Include specific tools and technologies
+  if (text.match(/midjourney|stable diffusion|dall-e|chatgpt|grasshopper|dynamo|revit.*ai/)) {
+    return true;
+  }
+  
+  return false;
+};
   // Check if article is relevant to AI in Architecture
   const isRelevantArticle = (title, description) => {
     const text = (title + ' ' + description).toLowerCase();
