@@ -314,7 +314,7 @@ const App = () => {
                   const cleanDescription = description.replace(/<[^>]*>/g, '').substring(0, 200);
                   
                   return {
-                    id: feed.source + '-' + index + '-' + Date.now() + '-' + Math.random(),
+                    id: item.link || item.guid || (feed.source + '-' + item.title.substring(0, 30).replace(/\W/g, '')),
                     title: title,
                     source: feed.source,
                     sourceLogo: feed.logo,
