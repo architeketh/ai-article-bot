@@ -43,15 +43,6 @@ const App = () => {
     source: 'TechCrunch AI',
     logo: '🤖'
   }
-
-  {
-    url: 'https://techcrunch.com/category/artificial-intelligence/feed/',
-    category: 'AI News',
-    source: 'TechCrunch AI',
-    logo: '🤖'
-  }
-
-   
 ];
 
   // Fetch articles from RSS feeds
