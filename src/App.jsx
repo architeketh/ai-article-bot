@@ -19,25 +19,31 @@ const App = () => {
 
   // RSS Feed sources
   const RSS_FEEDS = [
-    {
-      url: 'https://www.archdaily.com/feed',
-      category: 'Architecture News',
-      source: 'ArchDaily',
-      logo: '🏛️'
-    },
-    {
-      url: 'https://www.dezeen.com/feed/',
-      category: 'Design & Architecture',
-      source: 'Dezeen',
-      logo: '📐'
-    },
-    {
-      url: 'https://www.architectmagazine.com/rss',
-      category: 'Architecture Magazine',
-      source: 'Architect Magazine',
-      logo: '📰'
-    }
-  ];
+  {
+    url: 'https://www.archdaily.com/feed',
+    category: 'Architecture',
+    source: 'ArchDaily',
+    logo: '🏛️'
+  },
+  {
+    url: 'https://www.dezeen.com/feed/',
+    category: 'Design',
+    source: 'Dezeen',
+    logo: '📐'
+  },
+  {
+    url: 'https://www.architecturaldigest.com/feed/rss',
+    category: 'Architecture',
+    source: 'Architectural Digest',
+    logo: '🏠'
+  },
+  {
+    url: 'https://techcrunch.com/category/artificial-intelligence/feed/',
+    category: 'AI News',
+    source: 'TechCrunch AI',
+    logo: '🤖'
+  }
+];
 
   // Fetch articles from RSS feeds
   useEffect(() => {
