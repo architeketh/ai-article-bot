@@ -281,14 +281,31 @@ const App = () => {
     
     setArticles(prev => [categorized, ...prev]);
     
-    const manualArticles = JSON.parse(localStorage.getItem('manualArticles') || '[]');
-    manualArticles.push(categorized);
-    localStorage.setItem('manualArticles', JSON.stringify(manualArticles));
+    // Add article by URL
+const addArticleByURL = async (url) => {
+  if (!url.trim()) {
+    alert('Please enter a valid URL');
+    return;
+  }
+  
+  setSearchingManually(true);
+  
+  try {
+    // Use RSS2JSON to fetch the article
+    const response = await fetch(
+      'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(url) + '&api_key=q1ihf2w1uk1uwljssn3dngzhms9ajhqjpzfpqgf4'
+    );
     
-    setManualSearchResults(prev => prev.filter(a => a.id !== article.id));
+    const data = await response.json();
     
-    alert('Article added successfully!');
-  };
+    if (data.status === 'ok' && data.items && data.items.length > 0) {
+      // Show the article for approval
+      const item = data.items[0];
+      const article = {
+        id: 'manual-' + Date.now(),
+        title: item.title || 'Untitled',
+        source: data.feed?.title || 'Manual Addition',
+        sourceLogo: '
 
   useEffect(() => {
     const fetchArticles = async () => {
