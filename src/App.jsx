@@ -133,7 +133,9 @@ const App = () => {
 
   // Enhanced relevance checking
   const isRelevantArticle = (title, description) => {
-    const text = (title + ' ' + description).toLowerCase();
+  const text = (title + ' ' + description).toLowerCase();
+  
+  // HIGH PRIORITY: Rendering
     
     const highPriorityPatterns = [
       /ai.*architect/,
