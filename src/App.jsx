@@ -633,14 +633,14 @@ const App = () => {
           </div>
         )}
 
-        {!showWeeklySummary && (
-          <div<div className="mb-8">
-            <button onClick={() => setShowWeeklySummary(true)}
-              className={'flex items-center gap-2 px-4 py-2 rounded-lg font-medium hover:scale-105 transition ' + (darkMode ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/30' : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200')}>
-              <Sparkles className="w-4 h-4" />Show AI Architecture Insights
-            </button>
-          </div>
-        )}
+       {!showWeeklySummary && (
+  <div className="mb-8">
+    <button onClick={() => setShowWeeklySummary(true)}
+      className={'flex items-center gap-2 px-4 py-2 rounded-lg font-medium hover:scale-105 transition ' + (darkMode ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/30' : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200')}>
+      <Sparkles className="w-4 h-4" />Show AI Architecture Insights
+    </button>
+  </div>
+)}
 
         {showChart && chartData.length > 0 ? (
           <div className={'mb-8 p-6 rounded-xl border ' + (darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
