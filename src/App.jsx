@@ -19,151 +19,31 @@ const App = () => {
 
   // RSS Feed sources
   const RSS_FEEDS = [
-    // Architecture & Design Publications
-    {
-      url: 'https://www.archdaily.com/feed',
-      category: 'Architecture News',
-      source: 'ArchDaily',
-      logo: '🏛️',
-      priority: 1
-    },
-    {
-      url: 'https://www.dezeen.com/feed/',
-      category: 'Design & Technology',
-      source: 'Dezeen',
-      logo: '📐',
-      priority: 1
-    },
-    {
-      url: 'https://www.architectmagazine.com/rss',
-      category: 'Architecture Practice',
-      source: 'Architect Magazine',
-      logo: '📰',
-      priority: 2
-    },
-    {
-      url: 'https://architizer.com/blog/feed/',
-      category: 'Architecture Blog',
-      source: 'Architizer',
-      logo: '🏗️',
-      priority: 2
-    },
-    
-    // AI & Technology
-    {
-      url: 'https://techcrunch.com/category/artificial-intelligence/feed/',
-      category: 'AI Technology',
-      source: 'TechCrunch AI',
-      logo: '🤖',
-      priority: 1
-    },
-    {
-      url: 'https://www.technologyreview.com/topic/artificial-intelligence/feed',
-      category: 'AI Research',
-      source: 'MIT Technology Review',
-      logo: '🔬',
-      priority: 1
-    },
-    {
-      url: 'https://venturebeat.com/category/ai/feed/',
-      category: 'AI Industry',
-      source: 'VentureBeat AI',
-      logo: '💼',
-      priority: 2
-    },
-    
-    // Computational Design & Parametric
-    {
-      url: 'https://www.grasshopper3d.com/forum/feed/feed:topics:new',
-      category: 'Parametric Design',
-      source: 'Grasshopper3D Forum',
-      logo: '🦗',
-      priority: 1
-    },
-    
-    // BIM & Construction Tech
-    {
-      url: 'https://www.constructiondive.com/feeds/news/',
-      category: 'Construction Technology',
-      source: 'Construction Dive',
-      logo: '👷',
-      priority: 2
-    },
-    
-    // Academic & Research
-    {
-      url: 'https://arxiv.org/rss/cs.CV',
-      category: 'Computer Vision Research',
-      source: 'arXiv CV',
-      logo: '🎓',
-      priority: 2
-    },
-    {
-      url: 'https://arxiv.org/rss/cs.GR',
-      category: 'Graphics Research',
-      source: 'arXiv Graphics',
-      logo: '🖼️',
-      priority: 2
-    }
-  ];
-
-  // Check if article is relevant to AI in Architecture
-  const isRelevantArticle = (title, description) => {
-    const text = (title + ' ' + description).toLowerCase();
-    return AI_ARCHITECTURE_KEYWORDS.some(keyword => 
-      text.includes(keyword.toLowerCase())
-    );
-  };
-
-  // Categorize article based on content
-  const categorizeArticle = (title, description, defaultCategory) => {
-    const text = (title + ' ' + description).toLowerCase();
-    
-    if (text.match(/generative|parametric|computational|algorithm/)) {
-      return 'Generative Design';
-    } else if (text.match(/bim|revit|building information/)) {
-      return 'BIM & Digital Tools';
-    } else if (text.match(/render|visualization|3d|vr|ar|virtual|augmented/)) {
-      return 'Rendering & Visualization';
-    } else if (text.match(/ai|artificial intelligence|machine learning|neural|gpt|diffusion/)) {
-      return 'AI Technology';
-    } else if (text.match(/construction|fabrication|3d print|robot/)) {
-      return 'Construction Tech';
-    } else if (text.match(/blockchain|nft|smart contract/)) {
-      return 'Blockchain';
-    } else if (text.match(/education|teaching|learning|university|course/)) {
-      return 'Education';
-    } else if (text.match(/sustainable|energy|climate|environment/)) {
-      return 'Sustainability';
-    }
-    
-    return defaultCategory;
-  };
-
-  // Extract AI/Architecture-specific keywords
-  const extractKeywords = (text) => {
-    const foundKeywords = [];
-    const lowerText = text.toLowerCase();
-    
-    const keywordGroups = {
-      'generative design': ['generative', 'parametric'],
-      'ai rendering': ['render', 'visualization', 'midjourney', 'stable diffusion'],
-      'bim': ['bim', 'revit', 'building information'],
-      'machine learning': ['machine learning', 'ai', 'neural'],
-      'computational': ['algorithm', 'computational', 'optimization'],
-      'blockchain': ['blockchain', 'nft', 'smart contract'],
-      'digital fabrication': ['3d print', 'robotic', 'fabrication'],
-      'vr/ar': ['virtual reality', 'augmented reality', 'vr', 'ar']
-    };
-    
-    for (const [label, keywords] of Object.entries(keywordGroups)) {
-      if (keywords.some(kw => lowerText.includes(kw))) {
-        foundKeywords.push(label);
-      }
-    }
-    
-    return foundKeywords.slice(0, 4);
-  };
+  {
+    url: 'https://www.archdaily.com/feed',
+    category: 'Architecture',
+    source: 'ArchDaily',
+    logo: '🏛️'
+  },
+  {
+    url: 'https://www.dezeen.com/feed/',
+    category: 'Design',
+    source: 'Dezeen',
+    logo: '📐'
+  },
+  {
+    url: 'https://www.architecturaldigest.com/feed/rss',
+    category: 'Architecture',
+    source: 'Architectural Digest',
+    logo: '🏠'
+  },
+  {
+    url: 'https://techcrunch.com/category/artificial-intelligence/feed/',
+    category: 'AI News',
+    source: 'TechCrunch AI',
+    logo: '🤖'
+  }
+];
 
   // Fetch articles from RSS feeds
   useEffect(() => {
