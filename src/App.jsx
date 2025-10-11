@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Filter, Bookmark, BookmarkCheck, TrendingUp, Clock, ExternalLink, Moon, Sun, Building2, BarChart3, Calendar, Sparkles, RefreshCw } from 'lucide-react';
+import { Search, Filter, Bookmark, TrendingUp, Clock, ExternalLink, Moon, Sun, Building2, BarChart3, Calendar, Sparkles, RefreshCw, Check } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 const App = () => {
@@ -314,9 +314,9 @@ const App = () => {
                   <span className="text-2xl">{article.sourceLogo}</span>
                   <span className={`text-xs font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{article.source}</span>
                 </div>
-                <button onClick={() => toggleSave(article.id)} className={savedArticles.includes(article.id) ? 'text-yellow-500' : (darkMode ? 'text-gray-500 hover:text-yellow-400' : 'text-gray-400 hover:text-yellow-500')}>
-                  {savedArticles.includes(article.id) ? <BookmarkCheck className="w-5 h-5" /> : <Bookmark className="w-5 h-5" />}
-                </button>
+               <button onClick={() => toggleSave(article.id)} className={`relative ${savedArticles.includes(article.id) ? 'text-yellow-500' : (darkMode ? 'text-gray-500 hover:text-yellow-400' : 'text-gray-400 hover:text-yellow-500')}`}>
+               <Bookmark className="w-5 h-5" fill={savedArticles.includes(article.id) ? 'currentColor' : 'none'} />
+              </button>
               </div>
               <h2 className={`text-base font-bold mb-3 line-clamp-2 group-hover:text-blue-500 transition ${darkMode ? 'text-white' : 'text-gray-900'}`}>{article.title}</h2>
               <p className={`text-sm mb-4 line-clamp-3 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{article.summary}</p>
