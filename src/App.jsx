@@ -11,7 +11,6 @@ const App = () => {
   const [savedArticles, setSavedArticles] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
   const [showChart, setShowChart] = useState(true);
-  const [showArchiveChart, setShowArchiveChart] = useState(true);
   const [articlesPerPage, setArticlesPerPage] = useState(9);
   const [showWeeklySummary, setShowWeeklySummary] = useState(true);
   const [articles, setArticles] = useState([]);
@@ -789,6 +788,19 @@ const App = () => {
   };
 
   const chartData = getCategoryData();
+  
+  // Archive chart data - simple, calculated once
+  const archivedArticles = articles.filter(a => a.archived);
+  const archiveCategoryCount = {};
+  archivedArticles.forEach(article => {
+    if (article.category) {
+      archiveCategoryCount[article.category] = (archiveCategoryCount[article.category] || 0) + 1;
+    }
+  });
+  const archiveChartData = Object.entries(archiveCategoryCount)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
+  
   const colors = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#6366f1', '#f43f5e'];
 
   const getRelativeTime = (date) => {
@@ -1134,10 +1146,10 @@ const App = () => {
             <div className={'p-5 rounded-xl border ' + (darkMode ? 'bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-blue-500/30' : 'bg-gradient-to-br from-blue-50 to-purple-50 border-blue-200')}>
               <p className={'text-sm leading-relaxed ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>
                 {gistStatus === 'connected' ? (
-                  <>✅ <strong>Cloud Sync Active!</strong> Archives backed up to GitHub. <strong>New browser?</strong> Click Database icon → "Load from GitHub" to restore archives. Category buttons now show only relevant categories per tab.</>
+                  <>✅ <strong>Cloud Sync Active!</strong> Archives auto-backup to GitHub. {archivedArticles.length} archived articles. Archive tab now shows category chart automatically.</>
                 ) : (
-                  <>Click the <strong>Cloud icon</strong> to enable automatic GitHub backup of archives. <strong>In new browsers:</strong> Enter token then click Database → "Load from GitHub". Category buttons adapt to each tab!</>
-                )} {articles.filter(a => !a.archived).length} articles loaded, {articles.filter(a => a.archived).length} archived.
+                  <>Click the <strong>Cloud icon</strong> to enable GitHub backup. Archive tab will show category distribution chart when you have archived articles.</>
+                )} {articles.filter(a => !a.archived).length} articles, {archivedArticles.length} archived.
               </p>
             </div>
           </div>
