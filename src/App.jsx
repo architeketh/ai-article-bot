@@ -11,6 +11,7 @@ const App = () => {
   const [savedArticles, setSavedArticles] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
   const [showChart, setShowChart] = useState(true);
+  const [showArchiveChart, setShowArchiveChart] = useState(true);
   const [articlesPerPage, setArticlesPerPage] = useState(9);
   const [showWeeklySummary, setShowWeeklySummary] = useState(true);
   const [articles, setArticles] = useState([]);
