@@ -176,8 +176,13 @@ const App = () => {
       localStorage.setItem('githubGistToken', gistToken);
       setGistStatus('connected');
       setShowGistSettings(false);
-      syncToGist(); // Initial sync
-      alert('✅ GitHub Gist connected! Auto-sync enabled.');
+      
+      // Auto-sync immediately after connecting
+      setTimeout(() => {
+        syncToGist();
+      }, 500);
+      
+      alert('✅ GitHub Gist connected! Auto-sync enabled. Syncing now...');
     }
   };
 
@@ -778,21 +783,6 @@ const App = () => {
   };
 
   const chartData = getCategoryData();
-  
-  // Simple archive chart data calculation
-  const getArchiveChartData = () => {
-    const archivedArticles = articles.filter(a => a.archived);
-    const categoryCount = {};
-    archivedArticles.forEach(article => {
-      if (article.category) {
-        categoryCount[article.category] = (categoryCount[article.category] || 0) + 1;
-      }
-    });
-    return Object.entries(categoryCount)
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count);
-  };
-  
   const colors = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#6366f1', '#f43f5e'];
 
   const getRelativeTime = (date) => {
@@ -1138,9 +1128,9 @@ const App = () => {
             <div className={'p-5 rounded-xl border ' + (darkMode ? 'bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-blue-500/30' : 'bg-gradient-to-br from-blue-50 to-purple-50 border-blue-200')}>
               <p className={'text-sm leading-relaxed ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>
                 {gistStatus === 'connected' ? (
-                  <>✅ <strong>Cloud Sync Active!</strong> Added <strong>ArchDaily AI feed</strong> for more AI rendering articles. <strong>Archive now has its own category chart</strong> to visualize your archived content. <strong>Manual Addition</strong> now at top of source filters.</>
+                  <>✅ <strong>Cloud Sync Active!</strong> Archives backed up to GitHub. <strong>New browser?</strong> Click Database icon → "Load from GitHub" to restore archives. Category buttons now show only relevant categories per tab.</>
                 ) : (
-                  <>Click the <strong>Cloud icon</strong> to enable automatic GitHub backup. Added <strong>ArchDaily AI feed</strong> for dedicated AI rendering coverage. View archive category distribution with the new chart!</>
+                  <>Click the <strong>Cloud icon</strong> to enable automatic GitHub backup of archives. <strong>In new browsers:</strong> Enter token then click Database → "Load from GitHub". Category buttons adapt to each tab!</>
                 )} {articles.filter(a => !a.archived).length} articles loaded, {articles.filter(a => a.archived).length} archived.
               </p>
             </div>
