@@ -761,6 +761,22 @@ const App = () => {
   };
 
   const chartData = getCategoryData();
+  
+  // Calculate archive chart data fresh when on archive tab
+  const archiveChartData = React.useMemo(() => {
+    if (activeTab !== 'archive') return [];
+    const categoryCount = {};
+    const archivedArticles = articles.filter(a => a.archived);
+    archivedArticles.forEach(article => {
+      if (article.category) {
+        categoryCount[article.category] = (categoryCount[article.category] || 0) + 1;
+      }
+    });
+    return Object.entries(categoryCount)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [activeTab, articles]);
+  
   const colors = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#6366f1', '#f43f5e'];
 
   const getRelativeTime = (date) => {
@@ -1045,12 +1061,17 @@ const App = () => {
             <button onClick={() => setShowFilters(!showFilters)} className={'flex items-center gap-2 px-4 py-2 rounded-lg ' + (darkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white border text-gray-700 hover:bg-gray-50')}>
               <Filter className="w-4 h-4" />Filters
             </button>
-            {categories.slice(0, 6).map(cat => (
+            {categories.slice(0, 10).map(cat => (
               <button key={cat} onClick={() => setSelectedCategory(cat)}
                 className={'px-4 py-2 rounded-lg text-sm whitespace-nowrap ' + (selectedCategory === cat ? (darkMode ? 'bg-blue-500 text-white' : 'bg-blue-600 text-white') : (darkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white border text-gray-700 hover:bg-gray-50'))}>
                 {cat === 'all' ? 'All Topics' : cat}
               </button>
             ))}
+            {categories.length > 10 && (
+              <span className={'px-3 py-2 text-xs ' + (darkMode ? 'text-gray-500' : 'text-gray-400')}>
+                +{categories.length - 10} more in filters
+              </span>
+            )}
           </div>
 
           {showFilters && (
