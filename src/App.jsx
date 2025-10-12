@@ -171,18 +171,24 @@ const App = () => {
     }
   };
 
-  const saveGistSettings = () => {
+  const saveGistSettings = async () => {
     if (gistToken) {
       localStorage.setItem('githubGistToken', gistToken);
-      setGistStatus('connected');
       setShowGistSettings(false);
       
-      // Auto-sync immediately after connecting
-      setTimeout(() => {
-        syncToGist();
-      }, 500);
-      
-      alert('✅ GitHub Gist connected! Auto-sync enabled. Syncing now...');
+      // First, try to load existing data from Gist
+      if (gistId) {
+        setGistStatus('syncing');
+        alert('🔄 Loading your archived articles from GitHub...');
+        await loadFromGist();
+      } else {
+        // No Gist ID yet, create new one
+        setGistStatus('connected');
+        setTimeout(() => {
+          syncToGist();
+        }, 500);
+        alert('✅ GitHub Gist connected! Your data will be backed up automatically.');
+      }
     }
   };
 
