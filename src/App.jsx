@@ -189,91 +189,56 @@ const App = () => {
       category: 'Architecture News',
       source: 'ArchDaily',
       logo: '🏛️',
-      priority: 1
+      priority: 1,
+      requireBoth: true
     },
     {
       url: 'https://www.dezeen.com/feed/',
       category: 'Design Innovation',
       source: 'Dezeen',
       logo: '📐',
-      priority: 1
+      priority: 1,
+      requireBoth: true
     },
     {
       url: 'https://www.architectmagazine.com/rss',
       category: 'Practice & Technology',
       source: 'Architect Magazine',
       logo: '📰',
-      priority: 1
+      priority: 1,
+      requireBoth: true
     },
     {
       url: 'https://architizer.com/blog/feed/',
       category: 'Architecture Blog',
       source: 'Architizer',
       logo: '🏗️',
-      priority: 1
-    },
-    {
-      url: 'https://techcrunch.com/category/artificial-intelligence/feed/',
-      category: 'AI Technology',
-      source: 'TechCrunch AI',
-      logo: '💻',
-      priority: 2
-    },
-    {
-      url: 'https://www.technologyreview.com/topic/artificial-intelligence/feed',
-      category: 'AI Research',
-      source: 'MIT Technology Review',
-      logo: '🔬',
-      priority: 2
-    },
-    {
-      url: 'https://venturebeat.com/category/ai/feed/',
-      category: 'AI Industry',
-      source: 'VentureBeat AI',
-      logo: '💼',
-      priority: 2
-    },
-    {
-      url: 'https://www.theverge.com/ai-artificial-intelligence/rss/index.xml',
-      category: 'AI & Design Tech',
-      source: 'The Verge AI',
-      logo: '⚡',
-      priority: 2
-    },
-    {
-      url: 'https://www.fastcompany.com/technology/rss',
-      category: 'Innovation & Design',
-      source: 'Fast Company Tech',
-      logo: '🚀',
-      priority: 1
-    },
-    {
-      url: 'https://www.wired.com/feed/tag/ai/latest/rss',
-      category: 'AI Culture',
-      source: 'Wired AI',
-      logo: '🔮',
-      priority: 2
+      priority: 1,
+      requireBoth: true
     },
     {
       url: 'https://www.grasshopper3d.com/forum/feed/feed:topics:new',
       category: 'Parametric Tools',
       source: 'Grasshopper3D',
       logo: '🦗',
-      priority: 1
-    },
-    {
-      url: 'https://www.constructiondive.com/feeds/news/',
-      category: 'Construction Tech',
-      source: 'Construction Dive',
-      logo: '👷',
-      priority: 2
+      priority: 1,
+      requireBoth: false
     },
     {
       url: 'https://www.autodesk.com/blogs/feed/',
       category: 'Design Software',
       source: 'Autodesk Blog',
       logo: '🛠️',
-      priority: 2
+      priority: 1,
+      requireBoth: false
+    },
+    {
+      url: 'https://www.constructiondive.com/feeds/news/',
+      category: 'Construction Tech',
+      source: 'Construction Dive',
+      logo: '👷',
+      priority: 2,
+      requireBoth: true
     }
   ];
 
@@ -348,26 +313,26 @@ const App = () => {
     const lowerText = text.toLowerCase();
     
     const keywordGroups = {
+      'ai rendering': ['ai.*render', 'render.*ai', 'neural.*render', 'lookx', 'veras', 'ai.*visualization', 'rendering.*ai', 'ai.*photorealistic'],
       'midjourney': ['midjourney'],
       'stable diffusion': ['stable diffusion', 'diffusion model'],
       'chatgpt': ['chatgpt', 'gpt-4', 'gpt'],
       'generative design': ['generative', 'parametric'],
-      'ai rendering': ['render', 'visualization', 'ai.*render', 'lookx'],
+      'visualization': ['visualization', 'visuali[sz]e', '3d.*visual', 'photorealistic'],
       'bim': ['bim', 'revit', 'building information'],
       'machine learning': ['machine learning', 'ml', 'neural'],
       'design process': ['design process', 'workflow', 'practice'],
       'computational': ['algorithm', 'computational', 'optimization'],
-      'blockchain': ['blockchain', 'nft', 'smart contract'],
       'digital twin': ['digital twin', 'simulation'],
       'vr/ar': ['virtual reality', 'augmented reality', 'vr', 'ar'],
-      '3d printing': ['3d print', 'additive manufacturing'],
+      '3d modeling': ['3d.*model', 'cad', 'sketchup', 'rhino', 'blender'],
       'grasshopper': ['grasshopper', 'rhino'],
       'sustainability': ['sustainable', 'energy', 'climate'],
       'education': ['education', 'learning', 'course']
     };
     
     for (const [label, keywords] of Object.entries(keywordGroups)) {
-      if (keywords.some(kw => lowerText.includes(kw))) {
+      if (keywords.some(kw => new RegExp(kw, 'i').test(lowerText))) {
         foundKeywords.push(label);
       }
     }
@@ -549,6 +514,13 @@ const App = () => {
       localStorage.setItem('savedArticles', JSON.stringify(newSaved));
     }
     
+    // Track deleted articles so they don't come back
+    const deletedArticles = JSON.parse(localStorage.getItem('deletedArticles') || '[]');
+    if (!deletedArticles.includes(articleId)) {
+      deletedArticles.push(articleId);
+      localStorage.setItem('deletedArticles', JSON.stringify(deletedArticles));
+    }
+    
     const archivedArticles = JSON.parse(localStorage.getItem('archivedArticles') || '[]');
     const updatedArchived = archivedArticles.filter(a => a.id !== articleId);
     localStorage.setItem('archivedArticles', JSON.stringify(updatedArchived));
@@ -564,6 +536,17 @@ const App = () => {
       setError(null);
       
       try {
+        // Load from cache immediately for instant display
+        const cachedArticles = JSON.parse(localStorage.getItem('cachedArticles') || '[]');
+        const deletedArticles = JSON.parse(localStorage.getItem('deletedArticles') || '[]');
+        
+        if (cachedArticles.length > 0) {
+          const validCached = cachedArticles.filter(a => !deletedArticles.includes(a.id));
+          setArticles(validCached);
+          setLoading(false);
+        }
+        
+        // Then fetch fresh articles in background
         const archivedArticles = JSON.parse(localStorage.getItem('archivedArticles') || '[]');
         const manualArticles = JSON.parse(localStorage.getItem('manualArticles') || '[]');
         const allArticles = [];
@@ -588,10 +571,21 @@ const App = () => {
                   const description = item.description || '';
                   const text = (title + ' ' + description).toLowerCase();
                   
-                  const hasAIKeyword = /\b(ai|artificial intelligence|machine learning|neural|generative|parametric|computational)\b/i.test(text);
-                  const hasArchKeyword = /\b(architect|design|building|construction|render|bim|visualization)\b/i.test(text);
+                  // Enhanced AI keywords including rendering
+                  const hasAIKeyword = /\b(ai|artificial intelligence|machine learning|neural|generative|parametric|computational|midjourney|dall-e|stable diffusion|chatgpt|gpt|render.*ai|ai.*render|lookx|veras|ai.*visualization|neural.*render)\b/i.test(text);
                   
-                  return hasAIKeyword || hasArchKeyword;
+                  // Enhanced Architecture keywords
+                  const hasArchKeyword = /\b(architect|design|building|construction|render|rendering|visualization|visuali[sz]e|bim|3d.*model|cad|revit|sketchup|rhino|photorealistic|interior.*design|building.*design)\b/i.test(text);
+                  
+                  // Filter out pure tech articles without architecture context
+                  const isPureTech = /\b(smartphone|mobile.*app|web.*development|cryptocurrency|blockchain|nft|stock.*market|finance|healthcare|medical|pharmaceutical)\b/i.test(text) && !hasArchKeyword;
+                  
+                  // Require BOTH AI and Architecture keywords for most feeds
+                  if (feed.requireBoth) {
+                    return hasAIKeyword && hasArchKeyword && !isPureTech;
+                  }
+                  
+                  return (hasAIKeyword || hasArchKeyword) && !isPureTech;
                 })
                 .map((item, index) => {
                   const title = item.title || 'Untitled';
@@ -599,6 +593,11 @@ const App = () => {
                   const cleanDescription = description.replace(/<[^>]*>/g, '').substring(0, 200);
                   
                   const stableId = item.link || item.guid || (feed.source + '-' + title.replace(/\W/g, '').substring(0, 30));
+                  
+                  // Skip if deleted
+                  if (deletedArticles.includes(stableId)) {
+                    return null;
+                  }
                   
                   return {
                     id: stableId,
@@ -618,7 +617,8 @@ const App = () => {
                     archived: false,
                     manual: false
                   };
-                });
+                })
+                .filter(item => item !== null);
               
               allArticles.push(...processedArticles);
             }
@@ -627,13 +627,13 @@ const App = () => {
           }
         }
         
-        allArticles.push(...manualArticles);
+        allArticles.push(...manualArticles.filter(a => !deletedArticles.includes(a.id)));
         
         const combinedArticles = [...allArticles];
         const newArticleIds = new Set(allArticles.map(a => a.id));
         
         archivedArticles.forEach(archived => {
-          if (!newArticleIds.has(archived.id)) {
+          if (!newArticleIds.has(archived.id) && !deletedArticles.includes(archived.id)) {
             combinedArticles.push({ ...archived, archived: true });
           }
         });
@@ -645,6 +645,9 @@ const App = () => {
         });
         
         setArticles(combinedArticles);
+        
+        // Cache articles for next load
+        localStorage.setItem('cachedArticles', JSON.stringify(combinedArticles));
         
         const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
         const articlesToArchive = combinedArticles
@@ -1025,9 +1028,9 @@ const App = () => {
             <div className={'p-5 rounded-xl border ' + (darkMode ? 'bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-blue-500/30' : 'bg-gradient-to-br from-blue-50 to-purple-50 border-blue-200')}>
               <p className={'text-sm leading-relaxed ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>
                 {gistStatus === 'connected' ? (
-                  <>✅ <strong>Cloud Sync Active!</strong> Your articles automatically backup to GitHub Gist every 3 seconds. Access from any device!</>
+                  <>✅ <strong>Cloud Sync Active!</strong> Articles auto-backup to GitHub. <strong>Improved filtering:</strong> Now showing only AI + Architecture articles with better rendering content. Deleted articles won't reappear!</>
                 ) : (
-                  <>Click the <strong>Cloud icon</strong> to enable automatic GitHub backup - setup takes 2 minutes!</>
+                  <>Click the <strong>Cloud icon</strong> to enable automatic GitHub backup. <strong>Improved filtering</strong> now shows only AI + Architecture articles with more rendering content!</>
                 )} {articles.filter(a => !a.archived).length} articles loaded, {articles.filter(a => a.archived).length} archived.
               </p>
             </div>
