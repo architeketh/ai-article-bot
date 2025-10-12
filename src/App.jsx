@@ -225,6 +225,14 @@ const App = () => {
       requireBoth: false
     },
     {
+      url: 'https://www.archdaily.com/search/all?q=artificial+intelligence',
+      category: 'AI Tools',
+      source: 'ArchDaily AI',
+      logo: '🤖',
+      priority: 1,
+      requireBoth: false
+    },
+    {
       url: 'https://www.cgarchitect.com/feed',
       category: 'Rendering & Visualization',
       source: 'CG Architect',
@@ -724,7 +732,12 @@ const App = () => {
   }, []);
 
   const categories = ['all', ...new Set(articles.map(a => a.category).filter(Boolean))].sort();
-  const sources = ['all', ...new Set(articles.map(a => a.source))].filter(Boolean);
+  
+  // Organize sources with Manual Addition at top
+  const allSources = [...new Set(articles.map(a => a.source))].filter(Boolean);
+  const manualSource = allSources.find(s => s === 'Manual Addition');
+  const otherSources = allSources.filter(s => s !== 'Manual Addition').sort();
+  const sources = ['all', ...(manualSource ? [manualSource, '---'] : []), ...otherSources];
 
   const getCategoryData = () => {
     const categoryCount = {};
@@ -738,7 +751,20 @@ const App = () => {
       .sort((a, b) => b.count - a.count);
   };
 
+  const getArchiveCategoryData = () => {
+    const categoryCount = {};
+    articles.filter(a => a.archived).forEach(article => {
+      if (article.category) {
+        categoryCount[article.category] = (categoryCount[article.category] || 0) + 1;
+      }
+    });
+    return Object.entries(categoryCount)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+  };
+
   const chartData = getCategoryData();
+  const archiveChartData = getArchiveCategoryData();
   const colors = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#6366f1', '#f43f5e'];
 
   const getRelativeTime = (date) => {
@@ -1045,7 +1071,12 @@ const App = () => {
                   <label className={'block text-sm font-medium mb-2 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>Source</label>
                   <select value={selectedSource} onChange={(e) => setSelectedSource(e.target.value)}
                     className={'w-full px-3 py-2 rounded-lg border ' + (darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300')}>
-                    {sources.map(s => <option key={s} value={s}>{s === 'all' ? 'All Sources' : s}</option>)}
+                    {sources.map(s => {
+                      if (s === '---') {
+                        return <option key="separator" disabled>────────────</option>;
+                      }
+                      return <option key={s} value={s}>{s === 'all' ? 'All Sources' : s}</option>;
+                    })}
                   </select>
                 </div>
                 <div>
@@ -1074,9 +1105,9 @@ const App = () => {
             <div className={'p-5 rounded-xl border ' + (darkMode ? 'bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-blue-500/30' : 'bg-gradient-to-br from-blue-50 to-purple-50 border-blue-200')}>
               <p className={'text-sm leading-relaxed ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>
                 {gistStatus === 'connected' ? (
-                  <>✅ <strong>Cloud Sync Active!</strong> Added <strong>CG Architect, ArchDaily Rendering, Architectural Digest</strong> feeds. Enhanced detection for Midjourney, Enscape, Lumion, D5, V-Ray, Enscape, and more. Archive shows <strong>exact dates</strong> (sorted newest first).</>
+                  <>✅ <strong>Cloud Sync Active!</strong> Added <strong>ArchDaily AI feed</strong> for more AI rendering articles. <strong>Archive now has its own category chart</strong> to visualize your archived content. <strong>Manual Addition</strong> now at top of source filters.</>
                 ) : (
-                  <>Click the <strong>Cloud icon</strong> to enable automatic GitHub backup. Added <strong>rendering-focused feeds</strong> with better detection for Midjourney, Enscape, Lumion, V-Ray, and AI visualization tools!</>
+                  <>Click the <strong>Cloud icon</strong> to enable automatic GitHub backup. Added <strong>ArchDaily AI feed</strong> for dedicated AI rendering coverage. View archive category distribution with the new chart!</>
                 )} {articles.filter(a => !a.archived).length} articles loaded, {articles.filter(a => a.archived).length} archived.
               </p>
             </div>
