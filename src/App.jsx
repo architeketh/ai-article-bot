@@ -217,6 +217,22 @@ const App = () => {
       requireBoth: true
     },
     {
+      url: 'https://www.archdaily.com/search/all?q=rendering',
+      category: 'Rendering & Visualization',
+      source: 'ArchDaily Rendering',
+      logo: '🎨',
+      priority: 1,
+      requireBoth: false
+    },
+    {
+      url: 'https://www.cgarchitect.com/feed',
+      category: 'Rendering & Visualization',
+      source: 'CG Architect',
+      logo: '💻',
+      priority: 1,
+      requireBoth: false
+    },
+    {
       url: 'https://www.grasshopper3d.com/forum/feed/feed:topics:new',
       category: 'Parametric Tools',
       source: 'Grasshopper3D',
@@ -239,6 +255,14 @@ const App = () => {
       logo: '👷',
       priority: 2,
       requireBoth: true
+    },
+    {
+      url: 'https://www.architecturaldigest.com/feed/rss',
+      category: 'Design & Architecture',
+      source: 'Architectural Digest',
+      logo: '🏠',
+      priority: 1,
+      requireBoth: false
     }
   ];
 
@@ -313,12 +337,18 @@ const App = () => {
     const lowerText = text.toLowerCase();
     
     const keywordGroups = {
-      'ai rendering': ['ai.*render', 'render.*ai', 'neural.*render', 'lookx', 'veras', 'ai.*visualization', 'rendering.*ai', 'ai.*photorealistic'],
       'midjourney': ['midjourney'],
       'stable diffusion': ['stable diffusion', 'diffusion model'],
+      'enscape': ['enscape'],
+      'lumion': ['lumion'],
+      'twinmotion': ['twinmotion'],
+      'd5 render': ['d5.*render'],
+      'v-ray': ['vray', 'v-ray'],
+      'unreal engine': ['unreal.*engine', 'unreal'],
+      'ai rendering': ['ai.*render', 'render.*ai', 'neural.*render', 'lookx', 'veras', 'ai.*visualization', 'rendering.*ai', 'ai.*photorealistic'],
       'chatgpt': ['chatgpt', 'gpt-4', 'gpt'],
       'generative design': ['generative', 'parametric'],
-      'visualization': ['visualization', 'visuali[sz]e', '3d.*visual', 'photorealistic'],
+      'visualization': ['visualization', 'visuali[sz]e', '3d.*visual', 'photorealistic', 'archviz'],
       'bim': ['bim', 'revit', 'building information'],
       'machine learning': ['machine learning', 'ml', 'neural'],
       'design process': ['design process', 'workflow', 'practice'],
@@ -326,9 +356,8 @@ const App = () => {
       'digital twin': ['digital twin', 'simulation'],
       'vr/ar': ['virtual reality', 'augmented reality', 'vr', 'ar'],
       '3d modeling': ['3d.*model', 'cad', 'sketchup', 'rhino', 'blender'],
-      'grasshopper': ['grasshopper', 'rhino'],
-      'sustainability': ['sustainable', 'energy', 'climate'],
-      'education': ['education', 'learning', 'course']
+      'grasshopper': ['grasshopper'],
+      'sustainability': ['sustainable', 'energy', 'climate']
     };
     
     for (const [label, keywords] of Object.entries(keywordGroups)) {
@@ -571,21 +600,30 @@ const App = () => {
                   const description = item.description || '';
                   const text = (title + ' ' + description).toLowerCase();
                   
-                  // Enhanced AI keywords including rendering
-                  const hasAIKeyword = /\b(ai|artificial intelligence|machine learning|neural|generative|parametric|computational|midjourney|dall-e|stable diffusion|chatgpt|gpt|render.*ai|ai.*render|lookx|veras|ai.*visualization|neural.*render|algorithm|automat|digital.*design|smart.*design)\b/i.test(text);
+                  // Enhanced AI/tech keywords - more comprehensive
+                  const hasAIKeyword = /\b(ai|artificial intelligence|machine learning|neural|generative|parametric|computational|midjourney|dall-e|stable diffusion|chatgpt|gpt|render.*ai|ai.*render|lookx|veras|enscape|lumion|twinmotion|unreal|unity|d5.*render|corona|vray|octane|ai.*visualization|neural.*render|algorithm|automat|digital.*design|smart.*design|procedural)\b/i.test(text);
                   
-                  // Enhanced Architecture keywords
-                  const hasArchKeyword = /\b(architect|design|building|construction|render|rendering|visualization|visuali[sz]e|bim|3d.*model|cad|revit|sketchup|rhino|photorealistic|interior|facade|urban|planning|space|structure|blueprint|floor.*plan)\b/i.test(text);
+                  // Architecture/design keywords
+                  const hasArchKeyword = /\b(architect|design|building|construction|render|rendering|visualization|visuali[sz]e|bim|3d.*model|cad|revit|sketchup|rhino|photorealistic|interior|facade|urban|planning|space|structure|blueprint|floor.*plan|concept.*design|spatial)\b/i.test(text);
+                  
+                  // Very specific rendering/viz keywords (allow even without AI)
+                  const hasRenderingKeyword = /\b(midjourney|dall-e|stable diffusion|lookx|veras|enscape|lumion|twinmotion|d5.*render|corona|vray|octane|render|rendering|visualization|visuali[sz]e|photorealistic|3d.*visual|archviz)\b/i.test(text);
                   
                   // Filter out pure tech articles without architecture context
-                  const isPureTech = /\b(smartphone|mobile.*app|web.*development|cryptocurrency|stock.*market|finance.*tech|healthcare.*software|medical.*device|pharmaceutical)\b/i.test(text) && !hasArchKeyword;
+                  const isPureTech = /\b(smartphone|mobile.*app|web.*development|cryptocurrency|stock.*market|finance.*tech|healthcare.*software|medical.*device|pharmaceutical|video.*game|gaming)\b/i.test(text) && !hasArchKeyword && !hasRenderingKeyword;
                   
-                  // More lenient: only architecture feeds require BOTH keywords
+                  // More lenient rules:
+                  // 1. Rendering content gets through with just rendering keywords
+                  // 2. Architecture feeds need AI + Arch
+                  // 3. Design/parametric feeds need either
+                  if (hasRenderingKeyword && !isPureTech) {
+                    return true; // Allow rendering-focused content
+                  }
+                  
                   if (feed.requireBoth) {
                     return hasAIKeyword && hasArchKeyword && !isPureTech;
                   }
                   
-                  // Design/parametric feeds can have either
                   return (hasAIKeyword || hasArchKeyword) && !isPureTech;
                 })
                 .map((item, index) => {
@@ -1036,9 +1074,9 @@ const App = () => {
             <div className={'p-5 rounded-xl border ' + (darkMode ? 'bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-blue-500/30' : 'bg-gradient-to-br from-blue-50 to-purple-50 border-blue-200')}>
               <p className={'text-sm leading-relaxed ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>
                 {gistStatus === 'connected' ? (
-                  <>✅ <strong>Cloud Sync Active!</strong> Articles auto-backup to GitHub. Now loading up to <strong>50 articles per source</strong> with improved filtering. Archive sorted by date (newest first).</>
+                  <>✅ <strong>Cloud Sync Active!</strong> Added <strong>CG Architect, ArchDaily Rendering, Architectural Digest</strong> feeds. Enhanced detection for Midjourney, Enscape, Lumion, D5, V-Ray, Enscape, and more. Archive shows <strong>exact dates</strong> (sorted newest first).</>
                 ) : (
-                  <>Click the <strong>Cloud icon</strong> to enable automatic GitHub backup. Now loading up to <strong>50 articles per source</strong> with better AI + Architecture filtering!</>
+                  <>Click the <strong>Cloud icon</strong> to enable automatic GitHub backup. Added <strong>rendering-focused feeds</strong> with better detection for Midjourney, Enscape, Lumion, V-Ray, and AI visualization tools!</>
                 )} {articles.filter(a => !a.archived).length} articles loaded, {articles.filter(a => a.archived).length} archived.
               </p>
             </div>
@@ -1150,7 +1188,10 @@ const App = () => {
               <div className={'flex items-center justify-between pt-2'}>
                 <div className="flex items-center gap-3 text-xs">
                   <span className={'flex items-center gap-1 ' + (darkMode ? 'text-gray-500' : 'text-gray-500')}><Clock className="w-3.5 h-3.5" />{article.readTime} min</span>
-                  <span className={'flex items-center gap-1 ' + (darkMode ? 'text-gray-500' : 'text-gray-500')}><Calendar className="w-3.5 h-3.5" />{getRelativeTime(article.date)}</span>
+                  <span className={'flex items-center gap-1 ' + (darkMode ? 'text-gray-500' : 'text-gray-500')}>
+                    <Calendar className="w-3.5 h-3.5" />
+                    {activeTab === 'archive' ? new Date(article.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : getRelativeTime(article.date)}
+                  </span>
                 </div>
                 <a href={article.url} target="_blank" rel="noopener noreferrer" className={'flex items-center gap-1 text-xs font-medium ' + (darkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700')}>
                   Read<ExternalLink className="w-3.5 h-3.5" />
