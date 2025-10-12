@@ -554,7 +554,7 @@ const App = () => {
         for (const feed of RSS_FEEDS) {
           try {
             const response = await fetch(
-              'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(feed.url) + '&api_key=q1ihf2w1uk1uwljssn3dngzhms9ajhqjpzfpqgf4&count=20'
+              'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(feed.url) + '&api_key=q1ihf2w1uk1uwljssn3dngzhms9ajhqjpzfpqgf4&count=50'
             );
             
             if (!response.ok) {
@@ -572,19 +572,20 @@ const App = () => {
                   const text = (title + ' ' + description).toLowerCase();
                   
                   // Enhanced AI keywords including rendering
-                  const hasAIKeyword = /\b(ai|artificial intelligence|machine learning|neural|generative|parametric|computational|midjourney|dall-e|stable diffusion|chatgpt|gpt|render.*ai|ai.*render|lookx|veras|ai.*visualization|neural.*render)\b/i.test(text);
+                  const hasAIKeyword = /\b(ai|artificial intelligence|machine learning|neural|generative|parametric|computational|midjourney|dall-e|stable diffusion|chatgpt|gpt|render.*ai|ai.*render|lookx|veras|ai.*visualization|neural.*render|algorithm|automat|digital.*design|smart.*design)\b/i.test(text);
                   
                   // Enhanced Architecture keywords
-                  const hasArchKeyword = /\b(architect|design|building|construction|render|rendering|visualization|visuali[sz]e|bim|3d.*model|cad|revit|sketchup|rhino|photorealistic|interior.*design|building.*design)\b/i.test(text);
+                  const hasArchKeyword = /\b(architect|design|building|construction|render|rendering|visualization|visuali[sz]e|bim|3d.*model|cad|revit|sketchup|rhino|photorealistic|interior|facade|urban|planning|space|structure|blueprint|floor.*plan)\b/i.test(text);
                   
                   // Filter out pure tech articles without architecture context
-                  const isPureTech = /\b(smartphone|mobile.*app|web.*development|cryptocurrency|blockchain|nft|stock.*market|finance|healthcare|medical|pharmaceutical)\b/i.test(text) && !hasArchKeyword;
+                  const isPureTech = /\b(smartphone|mobile.*app|web.*development|cryptocurrency|stock.*market|finance.*tech|healthcare.*software|medical.*device|pharmaceutical)\b/i.test(text) && !hasArchKeyword;
                   
-                  // Require BOTH AI and Architecture keywords for most feeds
+                  // More lenient: only architecture feeds require BOTH keywords
                   if (feed.requireBoth) {
                     return hasAIKeyword && hasArchKeyword && !isPureTech;
                   }
                   
+                  // Design/parametric feeds can have either
                   return (hasAIKeyword || hasArchKeyword) && !isPureTech;
                 })
                 .map((item, index) => {
@@ -737,7 +738,14 @@ const App = () => {
     const matchesCategory = selectedCategory === 'all' || article.category === selectedCategory;
     const matchesSource = selectedSource === 'all' || article.source === selectedSource;
     return matchesSearch && matchesCategory && matchesSource;
-  }).sort((a, b) => sortBy === 'date' ? b.date - a.date : b.trending - a.trending);
+  }).sort((a, b) => {
+    // Always sort by date for archived articles
+    if (activeTab === 'archive') {
+      return b.date - a.date; // Newest first
+    }
+    // For active articles, use selected sort
+    return sortBy === 'date' ? b.date - a.date : b.trending - a.trending;
+  });
 
   const trendingCount = articles.filter(a => a.trending && !a.archived).length;
 
@@ -1028,9 +1036,9 @@ const App = () => {
             <div className={'p-5 rounded-xl border ' + (darkMode ? 'bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-blue-500/30' : 'bg-gradient-to-br from-blue-50 to-purple-50 border-blue-200')}>
               <p className={'text-sm leading-relaxed ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>
                 {gistStatus === 'connected' ? (
-                  <>✅ <strong>Cloud Sync Active!</strong> Articles auto-backup to GitHub. <strong>Improved filtering:</strong> Now showing only AI + Architecture articles with better rendering content. Deleted articles won't reappear!</>
+                  <>✅ <strong>Cloud Sync Active!</strong> Articles auto-backup to GitHub. Now loading up to <strong>50 articles per source</strong> with improved filtering. Archive sorted by date (newest first).</>
                 ) : (
-                  <>Click the <strong>Cloud icon</strong> to enable automatic GitHub backup. <strong>Improved filtering</strong> now shows only AI + Architecture articles with more rendering content!</>
+                  <>Click the <strong>Cloud icon</strong> to enable automatic GitHub backup. Now loading up to <strong>50 articles per source</strong> with better AI + Architecture filtering!</>
                 )} {articles.filter(a => !a.archived).length} articles loaded, {articles.filter(a => a.archived).length} archived.
               </p>
             </div>
