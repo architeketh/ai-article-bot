@@ -59,7 +59,9 @@ const App = () => {
         exportDate: new Date().toISOString(),
         version: '1.0',
         articles: articles,
-        savedArticles: savedArticles
+        savedArticles: savedArticles,
+        archivedArticles: articles.filter(a => a.archived),
+        deletedArticles: JSON.parse(localStorage.getItem('deletedArticles') || '[]')
       };
 
       const gistData = {
@@ -140,21 +142,27 @@ const App = () => {
 
       const data = JSON.parse(fileContent);
       
-      // Merge with existing articles
-      const existingIds = new Set(articles.map(a => a.id));
-      const newArticles = data.articles.filter(a => !existingIds.has(a.id));
-      
-      setArticles(prev => [...prev, ...newArticles]);
+      // Restore articles directly (they already include archived status)
+      setArticles(data.articles || []);
       
       if (data.savedArticles) {
-        const newSaved = [...new Set([...savedArticles, ...data.savedArticles])];
-        setSavedArticles(newSaved);
-        localStorage.setItem('savedArticles', JSON.stringify(newSaved));
+        setSavedArticles(data.savedArticles);
+        localStorage.setItem('savedArticles', JSON.stringify(data.savedArticles));
+      }
+
+      // Restore archived articles to localStorage
+      if (data.archivedArticles) {
+        localStorage.setItem('archivedArticles', JSON.stringify(data.archivedArticles));
+      }
+
+      // Restore deleted articles list
+      if (data.deletedArticles) {
+        localStorage.setItem('deletedArticles', JSON.stringify(data.deletedArticles));
       }
 
       setGistStatus('connected');
       setGistError('');
-      alert('✅ Successfully loaded from GitHub Gist!');
+      alert('✅ Successfully loaded from GitHub Gist! Archived articles restored.');
     } catch (err) {
       console.error('Gist load error:', err);
       setGistStatus('error');
@@ -754,14 +762,18 @@ const App = () => {
 
   const getArchiveCategoryData = () => {
     const categoryCount = {};
-    articles.filter(a => a.archived).forEach(article => {
+    const archivedArticles = articles.filter(a => a.archived);
+    console.log('Getting archive category data. Archived articles:', archivedArticles.length);
+    archivedArticles.forEach(article => {
       if (article.category) {
         categoryCount[article.category] = (categoryCount[article.category] || 0) + 1;
       }
     });
-    return Object.entries(categoryCount)
+    const result = Object.entries(categoryCount)
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count);
+    console.log('Archive chart data:', result);
+    return result;
   };
 
   const chartData = getCategoryData();
