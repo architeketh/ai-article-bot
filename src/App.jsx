@@ -760,24 +760,7 @@ const App = () => {
       .sort((a, b) => b.count - a.count);
   };
 
-  const getArchiveCategoryData = () => {
-    const categoryCount = {};
-    const archivedArticles = articles.filter(a => a.archived);
-    console.log('Getting archive category data. Archived articles:', archivedArticles.length);
-    archivedArticles.forEach(article => {
-      if (article.category) {
-        categoryCount[article.category] = (categoryCount[article.category] || 0) + 1;
-      }
-    });
-    const result = Object.entries(categoryCount)
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count);
-    console.log('Archive chart data:', result);
-    return result;
-  };
-
   const chartData = getCategoryData();
-  const archiveChartData = getArchiveCategoryData();
   const colors = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#6366f1', '#f43f5e'];
 
   const getRelativeTime = (date) => {
