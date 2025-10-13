@@ -90,7 +90,10 @@ const App = () => {
     const updatedFeeds = [...(customFeeds.length > 0 ? customFeeds : DEFAULT_RSS_FEEDS), newFeed];
     setCustomFeeds(updatedFeeds);
     localStorage.setItem('customFeeds', JSON.stringify(updatedFeeds));
-    alert('✅ Feed added! Refresh to load articles from this feed.');
+    
+    if (confirm('✅ Feed added! Refresh now to load articles from this feed?')) {
+      window.location.reload();
+    }
   };
 
   const toggleFeed = (index) => {
@@ -98,6 +101,10 @@ const App = () => {
     feedsToUpdate[index].enabled = !feedsToUpdate[index].enabled;
     setCustomFeeds(feedsToUpdate);
     localStorage.setItem('customFeeds', JSON.stringify(feedsToUpdate));
+    
+    if (confirm(`Feed ${feedsToUpdate[index].enabled ? 'enabled' : 'disabled'}! Refresh now to see changes?`)) {
+      window.location.reload();
+    }
   };
 
   const deleteFeed = (index) => {
@@ -106,6 +113,10 @@ const App = () => {
       feedsToUpdate.splice(index, 1);
       setCustomFeeds(feedsToUpdate);
       localStorage.setItem('customFeeds', JSON.stringify(feedsToUpdate));
+      
+      if (confirm('Feed deleted! Refresh now to see changes?')) {
+        window.location.reload();
+      }
     }
   };
 
@@ -113,7 +124,10 @@ const App = () => {
     if (confirm('Reset to default feeds? This will remove all custom feeds.')) {
       setCustomFeeds([]);
       localStorage.removeItem('customFeeds');
-      alert('✅ Reset to defaults! Refresh to reload.');
+      
+      if (confirm('✅ Reset to defaults! Refresh now to reload articles?')) {
+        window.location.reload();
+      }
     }
   };
 
