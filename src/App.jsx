@@ -1108,7 +1108,10 @@ const App = () => {
                 <Settings className="w-5 h-5" />
               </button>
               <button 
-                onClick={() => setShowFeedManager(true)} 
+                onClick={() => {
+                  console.log('Feed Manager button clicked');
+                  setShowFeedManager(true);
+                }} 
                 className={'p-2 rounded-lg transition ' + (darkMode ? 'bg-gray-800 text-purple-400 hover:bg-gray-700' : 'bg-gray-100 text-purple-600 hover:bg-gray-200')}
                 title="Manage RSS feeds"
               >
