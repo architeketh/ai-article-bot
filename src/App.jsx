@@ -898,7 +898,7 @@ const App = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {showFeedStatus && Object.keys(feedStatus).length > 0 && (
+        {showFeedStatus && (
           <div className={'mb-8 p-6 rounded-xl border ' + (darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
             <div className="flex items-center justify-between mb-4">
               <h2 className={'text-lg font-bold flex items-center gap-2 ' + (darkMode ? 'text-white' : 'text-gray-900')}>
@@ -908,27 +908,36 @@ const App = () => {
               <button onClick={() => setShowFeedStatus(false)} className={'text-sm ' + (darkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-600 hover:text-gray-700')}>Hide</button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {Object.entries(feedStatus).map(([source, info]) => (
-                <div key={source} className={'p-3 rounded-lg border ' + (darkMode ? 'bg-gray-750 border-gray-600' : 'bg-gray-50 border-gray-200')}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className={'font-medium text-sm ' + (darkMode ? 'text-white' : 'text-gray-900')}>{source}</span>
+              {RSS_FEEDS.map((feed) => {
+                const info = feedStatus[feed.source] || { status: 'pending', count: 0, error: 'Not yet fetched' };
+                return (
+                  <div key={feed.source} className={'p-3 rounded-lg border ' + (darkMode ? 'bg-gray-750 border-gray-600' : 'bg-gray-50 border-gray-200')}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className={'font-medium text-sm ' + (darkMode ? 'text-white' : 'text-gray-900')}>{feed.source}</span>
+                      {info.status === 'success' ? (
+                        <span className={'px-2 py-0.5 rounded text-xs font-medium ' + (darkMode ? 'bg-green-500/20 text-green-400' : 'bg-green-100 text-green-700')}>✓ Active</span>
+                      ) : info.status === 'pending' ? (
+                        <span className={'px-2 py-0.5 rounded text-xs font-medium ' + (darkMode ? 'bg-yellow-500/20 text-yellow-400' : 'bg-yellow-100 text-yellow-700')}>⏳ Pending</span>
+                      ) : (
+                        <span className={'px-2 py-0.5 rounded text-xs font-medium ' + (darkMode ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-700')}>✗ Failed</span>
+                      )}
+                    </div>
                     {info.status === 'success' ? (
-                      <span className={'px-2 py-0.5 rounded text-xs font-medium ' + (darkMode ? 'bg-green-500/20 text-green-400' : 'bg-green-100 text-green-700')}>✓ Active</span>
+                      <p className={'text-xs ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
+                        Fetched: {info.totalFetched} → Filtered: {info.count} articles
+                      </p>
+                    ) : info.status === 'pending' ? (
+                      <p className={'text-xs ' + (darkMode ? 'text-yellow-400' : 'text-yellow-600')}>
+                        Waiting for fetch... Refresh to load articles
+                      </p>
                     ) : (
-                      <span className={'px-2 py-0.5 rounded text-xs font-medium ' + (darkMode ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-700')}>✗ Failed</span>
+                      <p className={'text-xs ' + (darkMode ? 'text-red-400' : 'text-red-600')}>
+                        Error: {info.error}
+                      </p>
                     )}
                   </div>
-                  {info.status === 'success' ? (
-                    <p className={'text-xs ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
-                      Fetched: {info.totalFetched} → Filtered: {info.count} articles
-                    </p>
-                  ) : (
-                    <p className={'text-xs ' + (darkMode ? 'text-red-400' : 'text-red-600')}>
-                      Error: {info.error}
-                    </p>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
             <div className={'mt-4 p-3 rounded-lg text-sm ' + (darkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-700')}>
               💡 <strong>Tip:</strong> Failed feeds may be due to RSS2JSON API issues or invalid feed URLs. Working feeds will update automatically every 30 minutes.
