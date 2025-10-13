@@ -24,6 +24,8 @@ const App = () => {
   const [gistStatus, setGistStatus] = useState('disconnected');
   const [gistError, setGistError] = useState('');
   const fileInputRef = useRef(null);
+  const [feedStatus, setFeedStatus] = useState({});
+  const [showFeedStatus, setShowFeedStatus] = useState(false);
 
   // Load Gist settings on mount
   useEffect(() => {
@@ -623,6 +625,7 @@ const App = () => {
         const archivedArticles = JSON.parse(localStorage.getItem('archivedArticles') || '[]');
         const manualArticles = JSON.parse(localStorage.getItem('manualArticles') || '[]');
         const allArticles = [];
+        const newFeedStatus = {};
         
         for (const feed of RSS_FEEDS) {
           try {
@@ -632,6 +635,7 @@ const App = () => {
             
             if (!response.ok) {
               console.warn('Failed to fetch ' + feed.source);
+              newFeedStatus[feed.source] = { status: 'failed', count: 0, error: 'HTTP ' + response.status };
               continue;
             }
             
@@ -704,11 +708,17 @@ const App = () => {
                 .filter(item => item !== null);
               
               allArticles.push(...processedArticles);
+              newFeedStatus[feed.source] = { status: 'success', count: processedArticles.length, totalFetched: data.items.length };
+            } else {
+              newFeedStatus[feed.source] = { status: 'failed', count: 0, error: data.message || 'Invalid response' };
             }
           } catch (feedError) {
             console.error('Error fetching ' + feed.source + ':', feedError);
+            newFeedStatus[feed.source] = { status: 'error', count: 0, error: feedError.message };
           }
         }
+        
+        setFeedStatus(newFeedStatus);
         
         allArticles.push(...manualArticles.filter(a => !deletedArticles.includes(a.id)));
         
@@ -1059,6 +1069,13 @@ const App = () => {
               <button onClick={() => setShowChart(!showChart)} className={'p-2 rounded-lg ' + (darkMode ? 'bg-gray-800 text-blue-400 hover:bg-gray-700' : 'bg-gray-100 text-blue-600 hover:bg-gray-200')}>
                 <BarChart3 className="w-5 h-5" />
               </button>
+              <button 
+                onClick={() => setShowFeedStatus(!showFeedStatus)} 
+                className={'p-2 rounded-lg transition ' + (darkMode ? 'bg-gray-800 text-cyan-400 hover:bg-gray-700' : 'bg-gray-100 text-cyan-600 hover:bg-gray-200')}
+                title="View feed status"
+              >
+                <Settings className="w-5 h-5" />
+              </button>
               <button onClick={() => setDarkMode(!darkMode)} className={'p-2 rounded-lg ' + (darkMode ? 'bg-gray-800 text-yellow-400 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')}>
                 {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
               </button>
@@ -1168,6 +1185,48 @@ const App = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {showFeedStatus && Object.keys(feedStatus).length > 0 && (
+          <div className={'mb-8 p-6 rounded-xl border ' + (darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className={'text-lg font-bold flex items-center gap-2 ' + (darkMode ? 'text-white' : 'text-gray-900')}>
+                <Settings className="w-5 h-5" />
+                RSS Feed Status
+              </h2>
+              <button onClick={() => setShowFeedStatus(false)} className={'text-sm ' + (darkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-600 hover:text-gray-700')}>Hide</button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {Object.entries(feedStatus).map(([source, info]) => (
+                <div key={source} className={'p-3 rounded-lg border ' + (darkMode ? 'bg-gray-750 border-gray-600' : 'bg-gray-50 border-gray-200')}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className={'font-medium text-sm ' + (darkMode ? 'text-white' : 'text-gray-900')}>{source}</span>
+                    {info.status === 'success' ? (
+                      <span className={'px-2 py-0.5 rounded text-xs font-medium ' + (darkMode ? 'bg-green-500/20 text-green-400' : 'bg-green-100 text-green-700')}>
+                        ✓ Active
+                      </span>
+                    ) : (
+                      <span className={'px-2 py-0.5 rounded text-xs font-medium ' + (darkMode ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-700')}>
+                        ✗ Failed
+                      </span>
+                    )}
+                  </div>
+                  {info.status === 'success' ? (
+                    <p className={'text-xs ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
+                      Fetched: {info.totalFetched} → Filtered: {info.count} articles
+                    </p>
+                  ) : (
+                    <p className={'text-xs ' + (darkMode ? 'text-red-400' : 'text-red-600')}>
+                      Error: {info.error}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className={'mt-4 p-3 rounded-lg text-sm ' + (darkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-700')}>
+              💡 <strong>Tip:</strong> Failed feeds may be due to RSS2JSON API issues or invalid feed URLs. Working feeds will update automatically every 30 minutes.
+            </div>
+          </div>
+        )}
+
         {activeTab === 'all' && showWeeklySummary && (
           <div className="mb-8">
             <div className="flex items-center justify-between mb-4">
