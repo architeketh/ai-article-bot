@@ -29,6 +29,17 @@ const App = () => {
   const [showFeedManager, setShowFeedManager] = useState(false);
   const [customFeeds, setCustomFeeds] = useState([]);
 
+  const DEFAULT_RSS_FEEDS = [
+    { url: 'https://www.archdaily.com/feed', category: 'Architecture News', source: 'ArchDaily', logo: '🏛️', priority: 1, requireBoth: true, enabled: true },
+    { url: 'https://www.dezeen.com/feed/', category: 'Design Innovation', source: 'Dezeen', logo: '📐', priority: 1, requireBoth: true, enabled: true },
+    { url: 'https://www.architectmagazine.com/rss', category: 'Practice & Technology', source: 'Architect Magazine', logo: '📰', priority: 1, requireBoth: true, enabled: true },
+    { url: 'https://architizer.com/blog/feed/', category: 'Architecture Blog', source: 'Architizer', logo: '🏗️', priority: 1, requireBoth: true, enabled: true },
+    { url: 'https://www.constructiondive.com/feeds/news/', category: 'Construction Tech', source: 'Construction Dive', logo: '👷', priority: 2, requireBoth: true, enabled: true },
+    { url: 'https://www.architecturaldigest.com/feed/rss', category: 'Design & Architecture', source: 'Architectural Digest', logo: '🏠', priority: 1, requireBoth: false, enabled: true }
+  ];
+
+  const RSS_FEEDS = customFeeds.length > 0 ? customFeeds.filter(f => f.enabled) : DEFAULT_RSS_FEEDS.filter(f => f.enabled);
+
   // Load custom feeds and Gist settings on mount
   useEffect(() => {
     const savedToken = localStorage.getItem('githubGistToken');
@@ -41,7 +52,6 @@ const App = () => {
       }
     }
     
-    // Load custom feeds
     const savedFeeds = localStorage.getItem('customFeeds');
     if (savedFeeds) {
       try {
@@ -52,245 +62,10 @@ const App = () => {
     }
   }, []);
 
-  // Auto-sync to Gist when articles change (debounced)
-  useEffect(() => {
-    if (gistToken && articles.length > 0 && !loading) {
-      const timer = setTimeout(() => {
-        syncToGist();
-      }, 3000); // Wait 3 seconds after last change
-      return () => clearTimeout(timer);
-    }
-  }, [articles, savedArticles, gistToken]);
-
-  const syncToGist = async () => {
-    if (!gistToken) return;
-
-    try {
-      setGistStatus('syncing');
-      
-      const data = {
-        exportDate: new Date().toISOString(),
-        version: '1.0',
-        articles: articles,
-        savedArticles: savedArticles,
-        archivedArticles: articles.filter(a => a.archived),
-        deletedArticles: JSON.parse(localStorage.getItem('deletedArticles') || '[]')
-      };
-
-      const gistData = {
-        description: 'AI Architecture Articles Backup',
-        public: false,
-        files: {
-          'ai-architecture-articles.json': {
-            content: JSON.stringify(data, null, 2)
-          }
-        }
-      };
-
-      let response;
-      if (gistId) {
-        // Update existing Gist
-        response = await fetch(`https://api.github.com/gists/${gistId}`, {
-          method: 'PATCH',
-          headers: {
-            'Authorization': `token ${gistToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(gistData)
-        });
-      } else {
-        // Create new Gist
-        response = await fetch('https://api.github.com/gists', {
-          method: 'POST',
-          headers: {
-            'Authorization': `token ${gistToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(gistData)
-        });
-      }
-
-      if (!response.ok) {
-        throw new Error('Failed to sync to GitHub');
-      }
-
-      const result = await response.json();
-      
-      if (!gistId) {
-        setGistId(result.id);
-        localStorage.setItem('githubGistId', result.id);
-      }
-
-      setGistStatus('connected');
-      setGistError('');
-    } catch (err) {
-      console.error('Gist sync error:', err);
-      setGistStatus('error');
-      setGistError(err.message);
-    }
+  const handleOpenFeedManager = () => {
+    console.log('Opening feed manager...');
+    setShowFeedManager(true);
   };
-
-  const loadFromGist = async () => {
-    if (!gistToken || !gistId) return;
-
-    try {
-      setGistStatus('syncing');
-      
-      const response = await fetch(`https://api.github.com/gists/${gistId}`, {
-        headers: {
-          'Authorization': `token ${gistToken}`,
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to load from GitHub');
-      }
-
-      const gist = await response.json();
-      const fileContent = gist.files['ai-architecture-articles.json']?.content;
-      
-      if (!fileContent) {
-        throw new Error('No data found in Gist');
-      }
-
-      const data = JSON.parse(fileContent);
-      
-      // Restore to localStorage first (don't set state yet)
-      if (data.savedArticles) {
-        setSavedArticles(data.savedArticles);
-        localStorage.setItem('savedArticles', JSON.stringify(data.savedArticles));
-      }
-
-      // Restore archived articles to localStorage
-      if (data.archivedArticles) {
-        localStorage.setItem('archivedArticles', JSON.stringify(data.archivedArticles));
-      }
-
-      // Restore deleted articles list
-      if (data.deletedArticles) {
-        localStorage.setItem('deletedArticles', JSON.stringify(data.deletedArticles));
-      }
-
-      // Restore manual articles
-      const manualArticles = (data.articles || []).filter(a => a.manual);
-      if (manualArticles.length > 0) {
-        localStorage.setItem('manualArticles', JSON.stringify(manualArticles));
-      }
-
-      setGistStatus('connected');
-      setGistError('');
-      
-      const archivedCount = (data.archivedArticles || []).length;
-      alert(`✅ Successfully loaded from GitHub Gist!\n\n📦 Restored: ${archivedCount} archived articles\n🔄 Now fetching fresh articles...`);
-      
-      // Trigger a fresh fetch to get NEW articles and merge with archived ones
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
-    } catch (err) {
-      console.error('Gist load error:', err);
-      setGistStatus('error');
-      setGistError(err.message);
-      alert('❌ Error loading from Gist: ' + err.message);
-    }
-  };
-
-  const saveGistSettings = async () => {
-    if (gistToken) {
-      localStorage.setItem('githubGistToken', gistToken);
-      
-      // Save Gist ID if provided
-      if (gistId && gistId.trim()) {
-        localStorage.setItem('githubGistId', gistId.trim());
-      }
-      
-      setShowGistSettings(false);
-      
-      // First, try to load existing data from Gist
-      if (gistId && gistId.trim()) {
-        setGistStatus('syncing');
-        alert('🔄 Loading your archived articles from GitHub...');
-        await loadFromGist();
-      } else {
-        // No Gist ID yet, create new one
-        setGistStatus('connected');
-        setTimeout(() => {
-          syncToGist();
-        }, 500);
-        alert('✅ GitHub Gist connected! Your data will be backed up automatically.');
-      }
-    }
-  };
-
-  const disconnectGist = () => {
-    if (confirm('Disconnect GitHub Gist? Your data will remain in the Gist but auto-sync will stop.')) {
-      localStorage.removeItem('githubGistToken');
-      localStorage.removeItem('githubGistId');
-      setGistToken('');
-      setGistId('');
-      setGistStatus('disconnected');
-      setShowGistSettings(false);
-    }
-  };
-
-  const DEFAULT_RSS_FEEDS = [
-    {
-      url: 'https://www.archdaily.com/feed',
-      category: 'Architecture News',
-      source: 'ArchDaily',
-      logo: '🏛️',
-      priority: 1,
-      requireBoth: true,
-      enabled: true
-    },
-    {
-      url: 'https://www.dezeen.com/feed/',
-      category: 'Design Innovation',
-      source: 'Dezeen',
-      logo: '📐',
-      priority: 1,
-      requireBoth: true,
-      enabled: true
-    },
-    {
-      url: 'https://www.architectmagazine.com/rss',
-      category: 'Practice & Technology',
-      source: 'Architect Magazine',
-      logo: '📰',
-      priority: 1,
-      requireBoth: true,
-      enabled: true
-    },
-    {
-      url: 'https://architizer.com/blog/feed/',
-      category: 'Architecture Blog',
-      source: 'Architizer',
-      logo: '🏗️',
-      priority: 1,
-      requireBoth: true,
-      enabled: true
-    },
-    {
-      url: 'https://www.constructiondive.com/feeds/news/',
-      category: 'Construction Tech',
-      source: 'Construction Dive',
-      logo: '👷',
-      priority: 2,
-      requireBoth: true,
-      enabled: true
-    },
-    {
-      url: 'https://www.architecturaldigest.com/feed/rss',
-      category: 'Design & Architecture',
-      source: 'Architectural Digest',
-      logo: '🏠',
-      priority: 1,
-      requireBoth: false,
-      enabled: true
-    }
-  ];
-
-  const RSS_FEEDS = customFeeds.length > 0 ? customFeeds.filter(f => f.enabled) : DEFAULT_RSS_FEEDS.filter(f => f.enabled);
 
   const addFeed = () => {
     const url = prompt('Enter RSS feed URL:');
@@ -342,151 +117,188 @@ const App = () => {
     }
   };
 
+  // ... rest of your code continues with syncToGist, loadFromGist, etc.
+  
+  const syncToGist = async () => {
+    if (!gistToken) return;
+    try {
+      setGistStatus('syncing');
+      const data = {
+        exportDate: new Date().toISOString(),
+        version: '1.0',
+        articles: articles,
+        savedArticles: savedArticles,
+        archivedArticles: articles.filter(a => a.archived),
+        deletedArticles: JSON.parse(localStorage.getItem('deletedArticles') || '[]')
+      };
+      const gistData = {
+        description: 'AI Architecture Articles Backup',
+        public: false,
+        files: { 'ai-architecture-articles.json': { content: JSON.stringify(data, null, 2) } }
+      };
+      let response;
+      if (gistId) {
+        response = await fetch(`https://api.github.com/gists/${gistId}`, {
+          method: 'PATCH',
+          headers: { 'Authorization': `token ${gistToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(gistData)
+        });
+      } else {
+        response = await fetch('https://api.github.com/gists', {
+          method: 'POST',
+          headers: { 'Authorization': `token ${gistToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(gistData)
+        });
+      }
+      if (!response.ok) throw new Error('Failed to sync to GitHub');
+      const result = await response.json();
+      if (!gistId) {
+        setGistId(result.id);
+        localStorage.setItem('githubGistId', result.id);
+      }
+      setGistStatus('connected');
+      setGistError('');
+    } catch (err) {
+      console.error('Gist sync error:', err);
+      setGistStatus('error');
+      setGistError(err.message);
+    }
+  };
+
+  useEffect(() => {
+    if (gistToken && articles.length > 0 && !loading) {
+      const timer = setTimeout(() => { syncToGist(); }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [articles, savedArticles, gistToken]);
+
+  const loadFromGist = async () => {
+    if (!gistToken || !gistId) return;
+    try {
+      setGistStatus('syncing');
+      const response = await fetch(`https://api.github.com/gists/${gistId}`, {
+        headers: { 'Authorization': `token ${gistToken}` }
+      });
+      if (!response.ok) throw new Error('Failed to load from GitHub');
+      const gist = await response.json();
+      const fileContent = gist.files['ai-architecture-articles.json']?.content;
+      if (!fileContent) throw new Error('No data found in Gist');
+      const data = JSON.parse(fileContent);
+      if (data.savedArticles) {
+        setSavedArticles(data.savedArticles);
+        localStorage.setItem('savedArticles', JSON.stringify(data.savedArticles));
+      }
+      if (data.archivedArticles) localStorage.setItem('archivedArticles', JSON.stringify(data.archivedArticles));
+      if (data.deletedArticles) localStorage.setItem('deletedArticles', JSON.stringify(data.deletedArticles));
+      const manualArticles = (data.articles || []).filter(a => a.manual);
+      if (manualArticles.length > 0) localStorage.setItem('manualArticles', JSON.stringify(manualArticles));
+      setGistStatus('connected');
+      setGistError('');
+      const archivedCount = (data.archivedArticles || []).length;
+      alert(`✅ Successfully loaded from GitHub Gist!\n\n📦 Restored: ${archivedCount} archived articles\n🔄 Now fetching fresh articles...`);
+      setTimeout(() => { window.location.reload(); }, 1000);
+    } catch (err) {
+      console.error('Gist load error:', err);
+      setGistStatus('error');
+      setGistError(err.message);
+      alert('❌ Error loading from Gist: ' + err.message);
+    }
+  };
+
+  const saveGistSettings = async () => {
+    if (gistToken) {
+      localStorage.setItem('githubGistToken', gistToken);
+      if (gistId && gistId.trim()) localStorage.setItem('githubGistId', gistId.trim());
+      setShowGistSettings(false);
+      if (gistId && gistId.trim()) {
+        setGistStatus('syncing');
+        alert('🔄 Loading your archived articles from GitHub...');
+        await loadFromGist();
+      } else {
+        setGistStatus('connected');
+        setTimeout(() => { syncToGist(); }, 500);
+        alert('✅ GitHub Gist connected! Your data will be backed up automatically.');
+      }
+    }
+  };
+
+  const disconnectGist = () => {
+    if (confirm('Disconnect GitHub Gist? Your data will remain in the Gist but auto-sync will stop.')) {
+      localStorage.removeItem('githubGistToken');
+      localStorage.removeItem('githubGistId');
+      setGistToken('');
+      setGistId('');
+      setGistStatus('disconnected');
+      setShowGistSettings(false);
+    }
+  };
+
   const categorizeArticle = (title, description, defaultCategory) => {
     const text = (title + ' ' + description).toLowerCase();
-    
-    if (text.match(/design process|workflow|collaboration|practice|studio|architect.*use|how.*design/)) {
-      return 'Design Process';
-    }
-    
-    if (text.match(/tool|software|app|platform|midjourney|dall-e|stable diffusion|chatgpt|plugin|extension/)) {
-      return 'AI Tools';
-    }
-    
-    if (text.match(/machine learning|deep learning|neural network|model training|dataset|research|study/)) {
-      return 'Machine Learning';
-    }
-    
-    if (text.match(/generative|parametric|computational|algorithm|procedural/)) {
-      return 'Generative Design';
-    }
-    
-    if (text.match(/bim|revit|archicad|building information|digital.*tool|dynamo/)) {
-      return 'BIM & Digital Tools';
-    }
-    
-    if (text.match(/render|rendering|visualization|visuali[sz]e|3d.*visual|photorealistic|vray|lumion|unreal|unity|blender|corona|octane|lookx|ai.*render|render.*ai/)) {
-      return 'Rendering & Visualization';
-    }
-    
-    if (text.match(/virtual reality|augmented reality|vr|ar|xr|metaverse|immersive/)) {
-      return 'VR/AR/XR';
-    }
-    
-    if (text.match(/construction|fabrication|3d print|robotic|prefab|modular/)) {
-      return 'Construction Tech';
-    }
-    
-    if (text.match(/sustainable|sustainability|energy|climate|environmental|performance.*analysis|simulation/)) {
-      return 'Sustainability';
-    }
-    
-    if (text.match(/education|teaching|learning|course|workshop|tutorial|student|university/)) {
-      return 'Education';
-    }
-    
-    if (text.match(/hardware|device|sensor|iot|mobile|tablet|smartphone|wearable/)) {
-      return 'Hardware & Devices';
-    }
-    
-    if (text.match(/award|prize|winner|competition|recognition|honor|fellowship/)) {
-      return 'Awards & Recognition';
-    }
-    
-    if (text.match(/blockchain|nft|crypto|web3|smart contract|decentralized/)) {
-      return 'Blockchain';
-    }
-    
-    if (text.match(/trend|future|prediction|forecast|survey|report|analysis|market/)) {
-      return 'Trends & Analysis';
-    }
-    
-    if (text.match(/project|case study|firm|studio.*use|architect.*explain|example|implementation/)) {
-      return 'Case Studies';
-    }
-    
+    if (text.match(/design process|workflow|collaboration|practice|studio|architect.*use|how.*design/)) return 'Design Process';
+    if (text.match(/tool|software|app|platform|midjourney|dall-e|stable diffusion|chatgpt|plugin|extension/)) return 'AI Tools';
+    if (text.match(/machine learning|deep learning|neural network|model training|dataset|research|study/)) return 'Machine Learning';
+    if (text.match(/generative|parametric|computational|algorithm|procedural/)) return 'Generative Design';
+    if (text.match(/bim|revit|archicad|building information|digital.*tool|dynamo/)) return 'BIM & Digital Tools';
+    if (text.match(/render|rendering|visualization|visuali[sz]e|3d.*visual|photorealistic|vray|lumion|unreal|unity|blender|corona|octane|lookx|ai.*render|render.*ai/)) return 'Rendering & Visualization';
+    if (text.match(/virtual reality|augmented reality|vr|ar|xr|metaverse|immersive/)) return 'VR/AR/XR';
+    if (text.match(/construction|fabrication|3d print|robotic|prefab|modular/)) return 'Construction Tech';
+    if (text.match(/sustainable|sustainability|energy|climate|environmental|performance.*analysis|simulation/)) return 'Sustainability';
+    if (text.match(/education|teaching|learning|course|workshop|tutorial|student|university/)) return 'Education';
+    if (text.match(/hardware|device|sensor|iot|mobile|tablet|smartphone|wearable/)) return 'Hardware & Devices';
+    if (text.match(/award|prize|winner|competition|recognition|honor|fellowship/)) return 'Awards & Recognition';
+    if (text.match(/blockchain|nft|crypto|web3|smart contract|decentralized/)) return 'Blockchain';
+    if (text.match(/trend|future|prediction|forecast|survey|report|analysis|market/)) return 'Trends & Analysis';
+    if (text.match(/project|case study|firm|studio.*use|architect.*explain|example|implementation/)) return 'Case Studies';
     return defaultCategory;
   };
 
   const extractKeywords = (text) => {
     const foundKeywords = [];
     const lowerText = text.toLowerCase();
-    
     const keywordGroups = {
-      'midjourney': ['midjourney'],
-      'stable diffusion': ['stable diffusion', 'diffusion model'],
-      'enscape': ['enscape'],
-      'lumion': ['lumion'],
-      'twinmotion': ['twinmotion'],
-      'd5 render': ['d5.*render'],
-      'v-ray': ['vray', 'v-ray'],
+      'midjourney': ['midjourney'], 'stable diffusion': ['stable diffusion', 'diffusion model'], 'enscape': ['enscape'],
+      'lumion': ['lumion'], 'twinmotion': ['twinmotion'], 'd5 render': ['d5.*render'], 'v-ray': ['vray', 'v-ray'],
       'unreal engine': ['unreal.*engine', 'unreal'],
       'ai rendering': ['ai.*render', 'render.*ai', 'neural.*render', 'lookx', 'veras', 'ai.*visualization', 'rendering.*ai', 'ai.*photorealistic'],
-      'chatgpt': ['chatgpt', 'gpt-4', 'gpt'],
-      'generative design': ['generative', 'parametric'],
+      'chatgpt': ['chatgpt', 'gpt-4', 'gpt'], 'generative design': ['generative', 'parametric'],
       'visualization': ['visualization', 'visuali[sz]e', '3d.*visual', 'photorealistic', 'archviz'],
-      'bim': ['bim', 'revit', 'building information'],
-      'machine learning': ['machine learning', 'ml', 'neural'],
-      'design process': ['design process', 'workflow', 'practice'],
-      'computational': ['algorithm', 'computational', 'optimization'],
-      'digital twin': ['digital twin', 'simulation'],
-      'vr/ar': ['virtual reality', 'augmented reality', 'vr', 'ar'],
-      '3d modeling': ['3d.*model', 'cad', 'sketchup', 'rhino', 'blender'],
-      'grasshopper': ['grasshopper'],
+      'bim': ['bim', 'revit', 'building information'], 'machine learning': ['machine learning', 'ml', 'neural'],
+      'design process': ['design process', 'workflow', 'practice'], 'computational': ['algorithm', 'computational', 'optimization'],
+      'digital twin': ['digital twin', 'simulation'], 'vr/ar': ['virtual reality', 'augmented reality', 'vr', 'ar'],
+      '3d modeling': ['3d.*model', 'cad', 'sketchup', 'rhino', 'blender'], 'grasshopper': ['grasshopper'],
       'sustainability': ['sustainable', 'energy', 'climate']
     };
-    
     for (const [label, keywords] of Object.entries(keywordGroups)) {
-      if (keywords.some(kw => new RegExp(kw, 'i').test(lowerText))) {
-        foundKeywords.push(label);
-      }
+      if (keywords.some(kw => new RegExp(kw, 'i').test(lowerText))) foundKeywords.push(label);
     }
-    
     if (foundKeywords.length === 0) {
       const words = lowerText.split(/\W+/).filter(word => word.length > 4);
       foundKeywords.push(...words.slice(0, 3));
     }
-    
     return foundKeywords.slice(0, 4);
   };
 
   const exportData = (type = 'all') => {
     const exportData = {
-      exportDate: new Date().toISOString(),
-      version: '1.0',
-      articles: articles,
-      savedArticles: savedArticles,
-      archivedArticles: articles.filter(a => a.archived),
-      activeArticles: articles.filter(a => !a.archived),
+      exportDate: new Date().toISOString(), version: '1.0', articles: articles, savedArticles: savedArticles,
+      archivedArticles: articles.filter(a => a.archived), activeArticles: articles.filter(a => !a.archived),
       manualArticles: articles.filter(a => a.manual)
     };
-
-    let dataToExport;
-    let filename;
-
+    let dataToExport, filename;
     switch(type) {
       case 'archived':
-        dataToExport = {
-          exportDate: exportData.exportDate,
-          version: exportData.version,
-          articles: exportData.archivedArticles
-        };
+        dataToExport = { exportDate: exportData.exportDate, version: exportData.version, articles: exportData.archivedArticles };
         filename = `ai-arch-archived-${new Date().toISOString().split('T')[0]}.json`;
         break;
       case 'saved':
-        dataToExport = {
-          exportDate: exportData.exportDate,
-          version: exportData.version,
-          articles: articles.filter(a => savedArticles.includes(a.id)),
-          savedArticles: savedArticles
-        };
+        dataToExport = { exportDate: exportData.exportDate, version: exportData.version, articles: articles.filter(a => savedArticles.includes(a.id)), savedArticles: savedArticles };
         filename = `ai-arch-saved-${new Date().toISOString().split('T')[0]}.json`;
         break;
       default:
         dataToExport = exportData;
         filename = `ai-arch-backup-${new Date().toISOString().split('T')[0]}.json`;
     }
-
     const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -496,7 +308,6 @@ const App = () => {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    
     alert(`✅ Exported ${type === 'all' ? 'complete backup' : type + ' articles'} successfully!`);
     setShowExportMenu(false);
   };
@@ -504,46 +315,30 @@ const App = () => {
   const importData = (event) => {
     const file = event.target.files[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
         const importedData = JSON.parse(e.target.result);
-        
-        if (!importedData.articles || !Array.isArray(importedData.articles)) {
-          throw new Error('Invalid file format');
-        }
-
-        const confirmed = confirm(
-          `Import ${importedData.articles.length} articles from ${new Date(importedData.exportDate).toLocaleDateString()}?\n\n` +
-          `This will merge with your existing articles.`
-        );
-
+        if (!importedData.articles || !Array.isArray(importedData.articles)) throw new Error('Invalid file format');
+        const confirmed = confirm(`Import ${importedData.articles.length} articles from ${new Date(importedData.exportDate).toLocaleDateString()}?\n\nThis will merge with your existing articles.`);
         if (!confirmed) return;
-
         const existingIds = new Set(articles.map(a => a.id));
         const newArticles = importedData.articles.filter(a => !existingIds.has(a.id));
-        
         setArticles(prev => [...prev, ...newArticles]);
-
         if (importedData.savedArticles) {
           const newSaved = [...new Set([...savedArticles, ...importedData.savedArticles])];
           setSavedArticles(newSaved);
           localStorage.setItem('savedArticles', JSON.stringify(newSaved));
         }
-
         const archivedArticles = [...newArticles.filter(a => a.archived)];
         const manualArticles = [...newArticles.filter(a => a.manual)];
-        
         localStorage.setItem('archivedArticles', JSON.stringify(archivedArticles));
         localStorage.setItem('manualArticles', JSON.stringify(manualArticles));
-
         alert(`✅ Successfully imported ${newArticles.length} new articles!`);
       } catch (error) {
         alert('❌ Error importing file: ' + error.message);
       }
     };
-
     reader.readAsText(file);
     event.target.value = '';
   };
@@ -551,43 +346,24 @@ const App = () => {
   const addArticleByURL = () => {
     const url = prompt('Enter the article URL:');
     if (!url || !url.trim()) return;
-    
     const title = prompt('Enter article title:');
     if (!title || !title.trim()) return;
-    
     const summary = prompt('Enter a brief summary (optional):') || 'No description provided';
-    
     const newArticle = {
-      id: url,
-      title: title,
-      source: 'Manual Addition',
-      sourceLogo: '📌',
-      category: categorizeArticle(title, summary, 'Manual Addition'),
-      date: new Date(),
-      readTime: 5,
-      summary: summary,
-      url: url,
-      trending: false,
-      keywords: extractKeywords(title + ' ' + summary),
-      priority: 1,
-      archived: false,
-      manual: true
+      id: url, title: title, source: 'Manual Addition', sourceLogo: '📌',
+      category: categorizeArticle(title, summary, 'Manual Addition'), date: new Date(), readTime: 5,
+      summary: summary, url: url, trending: false, keywords: extractKeywords(title + ' ' + summary),
+      priority: 1, archived: false, manual: true
     };
-    
     setArticles(prev => [newArticle, ...prev]);
-    
     const manualArticles = JSON.parse(localStorage.getItem('manualArticles') || '[]');
     manualArticles.push(newArticle);
     localStorage.setItem('manualArticles', JSON.stringify(manualArticles));
-    
     alert('Article added successfully!');
   };
 
   const archiveArticle = (articleId) => {
-    setArticles(prev => prev.map(article => 
-      article.id === articleId ? { ...article, archived: true } : article
-    ));
-    
+    setArticles(prev => prev.map(article => article.id === articleId ? { ...article, archived: true } : article));
     const archivedArticles = JSON.parse(localStorage.getItem('archivedArticles') || '[]');
     const articleToArchive = articles.find(a => a.id === articleId);
     if (articleToArchive && !archivedArticles.find(a => a.id === articleId)) {
@@ -597,39 +373,28 @@ const App = () => {
   };
 
   const restoreArticle = (articleId) => {
-    setArticles(prev => prev.map(article => 
-      article.id === articleId ? { ...article, archived: false } : article
-    ));
-    
+    setArticles(prev => prev.map(article => article.id === articleId ? { ...article, archived: false } : article));
     const archivedArticles = JSON.parse(localStorage.getItem('archivedArticles') || '[]');
     const updatedArchived = archivedArticles.filter(a => a.id !== articleId);
     localStorage.setItem('archivedArticles', JSON.stringify(updatedArchived));
   };
 
   const deleteArticle = (articleId) => {
-    if (!confirm('Are you sure you want to permanently delete this article? This cannot be undone.')) {
-      return;
-    }
-    
+    if (!confirm('Are you sure you want to permanently delete this article? This cannot be undone.')) return;
     setArticles(prev => prev.filter(article => article.id !== articleId));
-    
     if (savedArticles.includes(articleId)) {
       const newSaved = savedArticles.filter(id => id !== articleId);
       setSavedArticles(newSaved);
       localStorage.setItem('savedArticles', JSON.stringify(newSaved));
     }
-    
-    // Track deleted articles so they don't come back
     const deletedArticles = JSON.parse(localStorage.getItem('deletedArticles') || '[]');
     if (!deletedArticles.includes(articleId)) {
       deletedArticles.push(articleId);
       localStorage.setItem('deletedArticles', JSON.stringify(deletedArticles));
     }
-    
     const archivedArticles = JSON.parse(localStorage.getItem('archivedArticles') || '[]');
     const updatedArchived = archivedArticles.filter(a => a.id !== articleId);
     localStorage.setItem('archivedArticles', JSON.stringify(updatedArchived));
-    
     const manualArticles = JSON.parse(localStorage.getItem('manualArticles') || '[]');
     const updatedManual = manualArticles.filter(a => a.id !== articleId);
     localStorage.setItem('manualArticles', JSON.stringify(updatedManual));
@@ -639,104 +404,54 @@ const App = () => {
     const fetchArticles = async () => {
       setLoading(true);
       setError(null);
-      
       try {
-        // Load from cache immediately for instant display
         const cachedArticles = JSON.parse(localStorage.getItem('cachedArticles') || '[]');
         const deletedArticles = JSON.parse(localStorage.getItem('deletedArticles') || '[]');
-        
         if (cachedArticles.length > 0) {
           const validCached = cachedArticles.filter(a => !deletedArticles.includes(a.id));
           setArticles(validCached);
           setLoading(false);
         }
-        
-        // Then fetch fresh articles in background
         const archivedArticles = JSON.parse(localStorage.getItem('archivedArticles') || '[]');
         const manualArticles = JSON.parse(localStorage.getItem('manualArticles') || '[]');
         const allArticles = [];
         const newFeedStatus = {};
-        
         for (const feed of RSS_FEEDS) {
           try {
-            const response = await fetch(
-              'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(feed.url) + '&api_key=q1ihf2w1uk1uwljssn3dngzhms9ajhqjpzfpqgf4&count=50'
-            );
-            
+            const response = await fetch('https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(feed.url) + '&api_key=q1ihf2w1uk1uwljssn3dngzhms9ajhqjpzfpqgf4&count=50');
             if (!response.ok) {
               console.warn('Failed to fetch ' + feed.source);
               newFeedStatus[feed.source] = { status: 'failed', count: 0, error: 'HTTP ' + response.status };
               continue;
             }
-            
             const data = await response.json();
-            
             if (data.status === 'ok' && data.items) {
-              const processedArticles = data.items
-                .filter(item => {
-                  const title = item.title || '';
-                  const description = item.description || '';
-                  const text = (title + ' ' + description).toLowerCase();
-                  
-                  // Enhanced AI/tech keywords - more comprehensive
-                  const hasAIKeyword = /\b(ai|artificial intelligence|machine learning|neural|generative|parametric|computational|midjourney|dall-e|stable diffusion|chatgpt|gpt|render.*ai|ai.*render|lookx|veras|enscape|lumion|twinmotion|unreal|unity|d5.*render|corona|vray|octane|ai.*visualization|neural.*render|algorithm|automat|digital.*design|smart.*design|procedural)\b/i.test(text);
-                  
-                  // Architecture/design keywords
-                  const hasArchKeyword = /\b(architect|design|building|construction|render|rendering|visualization|visuali[sz]e|bim|3d.*model|cad|revit|sketchup|rhino|photorealistic|interior|facade|urban|planning|space|structure|blueprint|floor.*plan|concept.*design|spatial)\b/i.test(text);
-                  
-                  // Very specific rendering/viz keywords (allow even without AI)
-                  const hasRenderingKeyword = /\b(midjourney|dall-e|stable diffusion|lookx|veras|enscape|lumion|twinmotion|d5.*render|corona|vray|octane|render|rendering|visualization|visuali[sz]e|photorealistic|3d.*visual|archviz)\b/i.test(text);
-                  
-                  // Filter out pure tech articles without architecture context
-                  const isPureTech = /\b(smartphone|mobile.*app|web.*development|cryptocurrency|stock.*market|finance.*tech|healthcare.*software|medical.*device|pharmaceutical|video.*game|gaming)\b/i.test(text) && !hasArchKeyword && !hasRenderingKeyword;
-                  
-                  // More lenient rules:
-                  // 1. Rendering content gets through with just rendering keywords
-                  // 2. Architecture feeds need AI + Arch
-                  // 3. Design/parametric feeds need either
-                  if (hasRenderingKeyword && !isPureTech) {
-                    return true; // Allow rendering-focused content
-                  }
-                  
-                  if (feed.requireBoth) {
-                    return hasAIKeyword && hasArchKeyword && !isPureTech;
-                  }
-                  
-                  return (hasAIKeyword || hasArchKeyword) && !isPureTech;
-                })
-                .map((item, index) => {
-                  const title = item.title || 'Untitled';
-                  const description = item.description || '';
-                  const cleanDescription = description.replace(/<[^>]*>/g, '').substring(0, 200);
-                  
-                  const stableId = item.link || item.guid || (feed.source + '-' + title.replace(/\W/g, '').substring(0, 30));
-                  
-                  // Skip if deleted
-                  if (deletedArticles.includes(stableId)) {
-                    return null;
-                  }
-                  
-                  return {
-                    id: stableId,
-                    title: title,
-                    source: feed.source,
-                    sourceLogo: feed.logo,
-                    category: categorizeArticle(title, description, feed.category),
-                    originalCategory: feed.category,
-                    date: new Date(item.pubDate || Date.now()),
-                    readTime: Math.floor(cleanDescription.length / 200) + 5,
-                    summary: cleanDescription + '...',
-                    url: item.link || item.guid || '#',
-                    trending: Math.random() > 0.75,
-                    keywords: extractKeywords(title + ' ' + description),
-                    image: item.enclosure?.link || item.thumbnail,
-                    priority: feed.priority,
-                    archived: false,
-                    manual: false
-                  };
-                })
-                .filter(item => item !== null);
-              
+              const processedArticles = data.items.filter(item => {
+                const title = item.title || '';
+                const description = item.description || '';
+                const text = (title + ' ' + description).toLowerCase();
+                const hasAIKeyword = /\b(ai|artificial intelligence|machine learning|neural|generative|parametric|computational|midjourney|dall-e|stable diffusion|chatgpt|gpt|render.*ai|ai.*render|lookx|veras|enscape|lumion|twinmotion|unreal|unity|d5.*render|corona|vray|octane|ai.*visualization|neural.*render|algorithm|automat|digital.*design|smart.*design|procedural)\b/i.test(text);
+                const hasArchKeyword = /\b(architect|design|building|construction|render|rendering|visualization|visuali[sz]e|bim|3d.*model|cad|revit|sketchup|rhino|photorealistic|interior|facade|urban|planning|space|structure|blueprint|floor.*plan|concept.*design|spatial)\b/i.test(text);
+                const hasRenderingKeyword = /\b(midjourney|dall-e|stable diffusion|lookx|veras|enscape|lumion|twinmotion|d5.*render|corona|vray|octane|render|rendering|visualization|visuali[sz]e|photorealistic|3d.*visual|archviz)\b/i.test(text);
+                const isPureTech = /\b(smartphone|mobile.*app|web.*development|cryptocurrency|stock.*market|finance.*tech|healthcare.*software|medical.*device|pharmaceutical|video.*game|gaming)\b/i.test(text) && !hasArchKeyword && !hasRenderingKeyword;
+                if (hasRenderingKeyword && !isPureTech) return true;
+                if (feed.requireBoth) return hasAIKeyword && hasArchKeyword && !isPureTech;
+                return (hasAIKeyword || hasArchKeyword) && !isPureTech;
+              }).map((item) => {
+                const title = item.title || 'Untitled';
+                const description = item.description || '';
+                const cleanDescription = description.replace(/<[^>]*>/g, '').substring(0, 200);
+                const stableId = item.link || item.guid || (feed.source + '-' + title.replace(/\W/g, '').substring(0, 30));
+                if (deletedArticles.includes(stableId)) return null;
+                return {
+                  id: stableId, title: title, source: feed.source, sourceLogo: feed.logo,
+                  category: categorizeArticle(title, description, feed.category), originalCategory: feed.category,
+                  date: new Date(item.pubDate || Date.now()), readTime: Math.floor(cleanDescription.length / 200) + 5,
+                  summary: cleanDescription + '...', url: item.link || item.guid || '#', trending: Math.random() > 0.75,
+                  keywords: extractKeywords(title + ' ' + description), image: item.enclosure?.link || item.thumbnail,
+                  priority: feed.priority, archived: false, manual: false
+                };
+              }).filter(item => item !== null);
               allArticles.push(...processedArticles);
               newFeedStatus[feed.source] = { status: 'success', count: processedArticles.length, totalFetched: data.items.length };
             } else {
@@ -747,42 +462,26 @@ const App = () => {
             newFeedStatus[feed.source] = { status: 'error', count: 0, error: feedError.message };
           }
         }
-        
         setFeedStatus(newFeedStatus);
-        
         allArticles.push(...manualArticles.filter(a => !deletedArticles.includes(a.id)));
-        
         const combinedArticles = [...allArticles];
         const newArticleIds = new Set(allArticles.map(a => a.id));
-        
         archivedArticles.forEach(archived => {
           if (!newArticleIds.has(archived.id) && !deletedArticles.includes(archived.id)) {
             combinedArticles.push({ ...archived, archived: true });
           }
         });
-        
         combinedArticles.sort((a, b) => {
           if (a.archived !== b.archived) return a.archived ? 1 : -1;
           if (a.priority !== b.priority) return a.priority - b.priority;
           return b.date - a.date;
         });
-        
         setArticles(combinedArticles);
-        
-        // Cache articles for next load
         localStorage.setItem('cachedArticles', JSON.stringify(combinedArticles));
-        
         const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-        const articlesToArchive = combinedArticles
-          .filter(a => new Date(a.date) > sevenDaysAgo)
-          .slice(0, 200);
-        
+        const articlesToArchive = combinedArticles.filter(a => new Date(a.date) > sevenDaysAgo).slice(0, 200);
         localStorage.setItem('archivedArticles', JSON.stringify(articlesToArchive));
-        
-        if (combinedArticles.length === 0) {
-          setError('No AI architecture articles found. Please try again later.');
-        }
-        
+        if (combinedArticles.length === 0) setError('No AI architecture articles found. Please try again later.');
       } catch (err) {
         setError('Failed to load articles. Please try again later.');
         console.error('Error fetching articles:', err);
@@ -790,7 +489,6 @@ const App = () => {
         setLoading(false);
       }
     };
-
     fetchArticles();
     const interval = setInterval(fetchArticles, 30 * 60 * 1000);
     return () => clearInterval(interval);
@@ -808,8 +506,6 @@ const App = () => {
   }, []);
 
   const categories = ['all', ...new Set(articles.map(a => a.category).filter(Boolean))].sort();
-  
-  // Dynamic categories based on active tab
   const getActiveCategoriesForTab = () => {
     let relevantArticles = [];
     if (activeTab === 'saved') {
@@ -819,14 +515,10 @@ const App = () => {
     } else {
       relevantArticles = articles.filter(a => !a.archived);
     }
-    
     const cats = new Set(relevantArticles.map(a => a.category).filter(Boolean));
     return ['all', ...Array.from(cats)].sort();
   };
-  
   const activeCategories = getActiveCategoriesForTab();
-  
-  // Organize sources with Manual Addition at top
   const allSources = [...new Set(articles.map(a => a.source))].filter(Boolean);
   const manualSource = allSources.find(s => s === 'Manual Addition');
   const otherSources = allSources.filter(s => s !== 'Manual Addition').sort();
@@ -835,72 +527,45 @@ const App = () => {
   const getCategoryData = () => {
     const categoryCount = {};
     articles.filter(a => !a.archived).forEach(article => {
-      if (article.category) {
-        categoryCount[article.category] = (categoryCount[article.category] || 0) + 1;
-      }
+      if (article.category) categoryCount[article.category] = (categoryCount[article.category] || 0) + 1;
     });
-    return Object.entries(categoryCount)
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count);
+    return Object.entries(categoryCount).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
   };
 
   const chartData = getCategoryData();
-  
-  // Archive chart data - simple, calculated once
   const archivedArticles = articles.filter(a => a.archived);
   const archiveCategoryCount = {};
   archivedArticles.forEach(article => {
-    if (article.category) {
-      archiveCategoryCount[article.category] = (archiveCategoryCount[article.category] || 0) + 1;
-    }
+    if (article.category) archiveCategoryCount[article.category] = (archiveCategoryCount[article.category] || 0) + 1;
   });
-  const archiveChartData = Object.entries(archiveCategoryCount)
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count);
-  
+  const archiveChartData = Object.entries(archiveCategoryCount).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
   const colors = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#6366f1', '#f43f5e'];
 
   const getRelativeTime = (date) => {
     const seconds = Math.floor((new Date() - date) / 1000);
     const intervals = { year: 31536000, month: 2592000, week: 604800, day: 86400, hour: 3600, minute: 60 };
-
     for (const [unit, secondsInUnit] of Object.entries(intervals)) {
       const interval = Math.floor(seconds / secondsInUnit);
-      if (interval >= 1) {
-        return interval + ' ' + unit + (interval === 1 ? '' : 's') + ' ago';
-      }
+      if (interval >= 1) return interval + ' ' + unit + (interval === 1 ? '' : 's') + ' ago';
     }
     return 'just now';
   };
 
   const toggleSave = (articleId) => {
-    const newSavedArticles = savedArticles.includes(articleId) 
-      ? savedArticles.filter(id => id !== articleId)
-      : [...savedArticles, articleId];
-    
+    const newSavedArticles = savedArticles.includes(articleId) ? savedArticles.filter(id => id !== articleId) : [...savedArticles, articleId];
     setSavedArticles(newSavedArticles);
     localStorage.setItem('savedArticles', JSON.stringify(newSavedArticles));
   };
 
-  const displayArticles = activeTab === 'saved' 
-    ? articles.filter(article => savedArticles.includes(article.id))
-    : activeTab === 'archive'
-    ? articles.filter(article => article.archived)
-    : articles.filter(article => !article.archived);
+  const displayArticles = activeTab === 'saved' ? articles.filter(article => savedArticles.includes(article.id)) : activeTab === 'archive' ? articles.filter(article => article.archived) : articles.filter(article => !article.archived);
 
   const filteredArticles = displayArticles.filter(article => {
-    const matchesSearch = article.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                         article.summary.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         article.keywords.some(kw => kw.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchesSearch = article.title.toLowerCase().includes(searchQuery.toLowerCase()) || article.summary.toLowerCase().includes(searchQuery.toLowerCase()) || article.keywords.some(kw => kw.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesCategory = selectedCategory === 'all' || article.category === selectedCategory;
     const matchesSource = selectedSource === 'all' || article.source === selectedSource;
     return matchesSearch && matchesCategory && matchesSource;
   }).sort((a, b) => {
-    // Always sort by date for archived articles
-    if (activeTab === 'archive') {
-      return b.date - a.date; // Newest first
-    }
-    // For active articles, use selected sort
+    if (activeTab === 'archive') return b.date - a.date;
     return sortBy === 'date' ? b.date - a.date : b.trending - a.trending;
   });
 
@@ -923,12 +588,7 @@ const App = () => {
         <div className="text-center max-w-md">
           <AlertCircle className={'w-12 h-12 mx-auto mb-4 ' + (darkMode ? 'text-red-400' : 'text-red-600')} />
           <p className={'text-lg mb-4 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>{error}</p>
-          <button 
-            onClick={() => window.location.reload()}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-          >
-            Retry
-          </button>
+          <button onClick={() => window.location.reload()} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">Retry</button>
         </div>
       </div>
     );
@@ -936,23 +596,88 @@ const App = () => {
 
   return (
     <div className={'min-h-screen transition-colors duration-300 ' + (darkMode ? 'bg-gray-900' : 'bg-gray-50')}>
-      {/* Debug indicator */}
+      <input type="file" ref={fileInputRef} onChange={importData} accept=".json" style={{ display: 'none' }} />
+
+      {/* Feed Manager Modal */}
       {showFeedManager && (
-        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded z-[70]">
-          Feed Manager State: TRUE
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 overflow-y-auto"
+          style={{ zIndex: 9999 }}
+          onClick={() => setShowFeedManager(false)}
+        >
+          <div 
+            className={'max-w-4xl w-full rounded-xl p-6 my-8 max-h-[90vh] overflow-y-auto ' + (darkMode ? 'bg-gray-800' : 'bg-white')}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={'flex items-center justify-between mb-4 pb-4 border-b ' + (darkMode ? 'border-gray-700' : 'border-gray-200')}>
+              <h2 className={'text-xl font-bold flex items-center gap-2 ' + (darkMode ? 'text-white' : 'text-gray-900')}>
+                <Filter className="w-6 h-6" />
+                RSS Feed Manager
+              </h2>
+              <button 
+                onClick={() => setShowFeedManager(false)} 
+                className={'p-2 rounded-lg transition ' + (darkMode ? 'hover:bg-gray-700 text-gray-300' : 'hover:bg-gray-100 text-gray-700')}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className={'mb-4 p-4 rounded-lg ' + (darkMode ? 'bg-blue-500/10 border border-blue-500/30' : 'bg-blue-50 border border-blue-200')}>
+              <p className={'text-sm ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>
+                Manage your RSS feeds. Enable/disable feeds or add custom ones. Changes take effect after refresh.
+              </p>
+            </div>
+
+            <div className="mb-4 flex gap-2">
+              <button onClick={addFeed} className={'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ' + (darkMode ? 'bg-green-500 text-white hover:bg-green-600' : 'bg-green-600 text-white hover:bg-green-700')}>
+                + Add Custom Feed
+              </button>
+              <button onClick={resetFeeds} className={'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ' + (darkMode ? 'bg-orange-500/10 text-orange-400 hover:bg-orange-500/20' : 'bg-orange-50 text-orange-700 hover:bg-orange-100')}>
+                Reset to Defaults
+              </button>
+            </div>
+
+            <div className={'space-y-2 ' + (darkMode ? 'text-white' : 'text-gray-900')}>
+              {(customFeeds.length > 0 ? customFeeds : DEFAULT_RSS_FEEDS).map((feed, index) => (
+                <div key={index} className={'p-4 rounded-lg border flex items-center justify-between ' + (darkMode ? 'bg-gray-750 border-gray-600' : 'bg-gray-50 border-gray-200')}>
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <span className="text-2xl flex-shrink-0">{feed.logo}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className={'font-semibold ' + (darkMode ? 'text-white' : 'text-gray-900')}>{feed.source}</h3>
+                        {!feed.enabled && (<span className={'px-2 py-0.5 rounded text-xs ' + (darkMode ? 'bg-gray-600 text-gray-400' : 'bg-gray-200 text-gray-600')}>Disabled</span>)}
+                        {feedStatus[feed.source]?.status === 'failed' && feed.enabled && (<span className={'px-2 py-0.5 rounded text-xs ' + (darkMode ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-700')}>Failed</span>)}
+                      </div>
+                      <p className={'text-xs ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>{feed.category}</p>
+                      <p className={'text-xs truncate ' + (darkMode ? 'text-gray-500' : 'text-gray-500')}>{feed.url}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => toggleFeed(index)}
+                      className={'px-3 py-1.5 rounded-lg text-xs font-medium transition whitespace-nowrap ' + (feed.enabled 
+                        ? (darkMode ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30' : 'bg-green-100 text-green-700 hover:bg-green-200')
+                        : (darkMode ? 'bg-gray-600 text-gray-400 hover:bg-gray-500' : 'bg-gray-200 text-gray-600 hover:bg-gray-300')
+                      )}
+                    >
+                      {feed.enabled ? 'Enabled' : 'Disabled'}
+                    </button>
+                    <button onClick={() => deleteFeed(index)} className={'p-2 rounded-lg transition ' + (darkMode ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20' : 'bg-red-50 text-red-700 hover:bg-red-100')} title="Delete feed">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className={'mt-4 p-3 rounded-lg text-sm ' + (darkMode ? 'bg-yellow-500/10 text-yellow-400' : 'bg-yellow-50 text-yellow-700')}>
+              💡 After adding or removing feeds, click the refresh button to load articles from updated sources.
+            </div>
+          </div>
         </div>
       )}
-      
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={importData}
-        accept=".json"
-        style={{ display: 'none' }}
-      />
 
-      {/* GitHub Gist Settings Modal */}
-      {/* GitHub Gist Settings Modal */}
+      {/* Gist Settings Modal */}
       {showGistSettings && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className={'max-w-2xl w-full rounded-xl p-6 ' + (darkMode ? 'bg-gray-800' : 'bg-white')}>
@@ -979,29 +704,13 @@ const App = () => {
             </div>
 
             <div className="mb-4">
-              <label className={'block text-sm font-medium mb-2 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>
-                GitHub Personal Access Token
-              </label>
-              <input
-                type="password"
-                value={gistToken}
-                onChange={(e) => setGistToken(e.target.value)}
-                placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                className={'w-full px-4 py-2 rounded-lg border font-mono text-sm ' + (darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300')}
-              />
+              <label className={'block text-sm font-medium mb-2 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>GitHub Personal Access Token</label>
+              <input type="password" value={gistToken} onChange={(e) => setGistToken(e.target.value)} placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" className={'w-full px-4 py-2 rounded-lg border font-mono text-sm ' + (darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300')} />
             </div>
 
             <div className="mb-4">
-              <label className={'block text-sm font-medium mb-2 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>
-                Gist ID (optional - leave blank for new Gist)
-              </label>
-              <input
-                type="text"
-                value={gistId}
-                onChange={(e) => setGistId(e.target.value)}
-                placeholder="abc123def456... (find in your GitHub Gists)"
-                className={'w-full px-4 py-2 rounded-lg border font-mono text-sm ' + (darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300')}
-              />
+              <label className={'block text-sm font-medium mb-2 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>Gist ID (optional - leave blank for new Gist)</label>
+              <input type="text" value={gistId} onChange={(e) => setGistId(e.target.value)} placeholder="abc123def456... (find in your GitHub Gists)" className={'w-full px-4 py-2 rounded-lg border font-mono text-sm ' + (darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300')} />
               <p className={'text-xs mt-1 ' + (darkMode ? 'text-gray-500' : 'text-gray-600')}>
                 To restore from existing backup: Go to <a href="https://gist.github.com" target="_blank" className="text-blue-500 hover:underline">gist.github.com</a>, find "AI Architecture Articles Backup", copy the ID from the URL
               </p>
@@ -1014,19 +723,12 @@ const App = () => {
             )}
 
             <div className="flex gap-2">
-              <button
-                onClick={saveGistSettings}
-                disabled={!gistToken}
-                className={'flex-1 px-4 py-2 rounded-lg font-medium transition ' + (darkMode ? 'bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50' : 'bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50')}
-              >
+              <button onClick={saveGistSettings} disabled={!gistToken} className={'flex-1 px-4 py-2 rounded-lg font-medium transition ' + (darkMode ? 'bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50' : 'bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50')}>
                 <Check className="w-4 h-4 inline mr-2" />
                 Save & Enable Auto-Sync
               </button>
               {gistStatus === 'connected' && (
-                <button
-                  onClick={disconnectGist}
-                  className={'px-4 py-2 rounded-lg font-medium transition ' + (darkMode ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20' : 'bg-red-50 text-red-700 hover:bg-red-100')}
-                >
+                <button onClick={disconnectGist} className={'px-4 py-2 rounded-lg font-medium transition ' + (darkMode ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20' : 'bg-red-50 text-red-700 hover:bg-red-100')}>
                   Disconnect
                 </button>
               )}
@@ -1050,22 +752,12 @@ const App = () => {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowGistSettings(true)}
-                className={'p-2 rounded-lg transition relative ' + (darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200') + ' ' + (gistStatus === 'connected' ? 'text-green-400' : gistStatus === 'syncing' ? 'text-blue-400' : gistStatus === 'error' ? 'text-red-400' : 'text-gray-400')}
-                title={gistStatus === 'connected' ? 'Cloud sync enabled' : 'Setup cloud sync'}
-              >
+              <button onClick={() => setShowGistSettings(true)} className={'p-2 rounded-lg transition relative ' + (darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200') + ' ' + (gistStatus === 'connected' ? 'text-green-400' : gistStatus === 'syncing' ? 'text-blue-400' : gistStatus === 'error' ? 'text-red-400' : 'text-gray-400')} title={gistStatus === 'connected' ? 'Cloud sync enabled' : 'Setup cloud sync'}>
                 {gistStatus === 'connected' ? <Cloud className="w-5 h-5" /> : <CloudOff className="w-5 h-5" />}
-                {gistStatus === 'syncing' && (
-                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full animate-pulse"></span>
-                )}
+                {gistStatus === 'syncing' && (<span className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full animate-pulse"></span>)}
               </button>
               <div className="relative">
-                <button 
-                  onClick={() => setShowExportMenu(!showExportMenu)}
-                  className={'p-2 rounded-lg transition ' + (darkMode ? 'bg-gray-800 text-purple-400 hover:bg-gray-700' : 'bg-gray-100 text-purple-600 hover:bg-gray-200')}
-                  title="Export/Import data"
-                >
+                <button onClick={() => setShowExportMenu(!showExportMenu)} className={'p-2 rounded-lg transition ' + (darkMode ? 'bg-gray-800 text-purple-400 hover:bg-gray-700' : 'bg-gray-100 text-purple-600 hover:bg-gray-200')} title="Export/Import data">
                   <Database className="w-5 h-5" />
                 </button>
                 {showExportMenu && (
@@ -1097,31 +789,16 @@ const App = () => {
                   </div>
                 )}
               </div>
-              <button 
-                onClick={() => window.location.reload()} 
-                className={'p-2 rounded-lg transition ' + (darkMode ? 'bg-gray-800 text-green-400 hover:bg-gray-700' : 'bg-gray-100 text-green-600 hover:bg-gray-200')}
-                title="Refresh articles"
-              >
+              <button onClick={() => window.location.reload()} className={'p-2 rounded-lg transition ' + (darkMode ? 'bg-gray-800 text-green-400 hover:bg-gray-700' : 'bg-gray-100 text-green-600 hover:bg-gray-200')} title="Refresh articles">
                 <RefreshCw className="w-5 h-5" />
               </button>
               <button onClick={() => setShowChart(!showChart)} className={'p-2 rounded-lg ' + (darkMode ? 'bg-gray-800 text-blue-400 hover:bg-gray-700' : 'bg-gray-100 text-blue-600 hover:bg-gray-200')}>
                 <BarChart3 className="w-5 h-5" />
               </button>
-              <button 
-                onClick={() => setShowFeedStatus(!showFeedStatus)} 
-                className={'p-2 rounded-lg transition ' + (darkMode ? 'bg-gray-800 text-cyan-400 hover:bg-gray-700' : 'bg-gray-100 text-cyan-600 hover:bg-gray-200')}
-                title="View feed status"
-              >
+              <button onClick={() => setShowFeedStatus(!showFeedStatus)} className={'p-2 rounded-lg transition ' + (darkMode ? 'bg-gray-800 text-cyan-400 hover:bg-gray-700' : 'bg-gray-100 text-cyan-600 hover:bg-gray-200')} title="View feed status">
                 <Settings className="w-5 h-5" />
               </button>
-              <button 
-                onClick={() => {
-                  alert('Filter button clicked!');
-                  setShowFeedManager(true);
-                }} 
-                className={'p-2 rounded-lg transition ' + (darkMode ? 'bg-gray-800 text-purple-400 hover:bg-gray-700' : 'bg-gray-100 text-purple-600 hover:bg-gray-200')}
-                title="Manage RSS feeds"
-              >
+              <button onClick={handleOpenFeedManager} className={'p-2 rounded-lg transition ' + (darkMode ? 'bg-gray-800 text-purple-400 hover:bg-gray-700' : 'bg-gray-100 text-purple-600 hover:bg-gray-200')} title="Manage RSS feeds">
                 <Filter className="w-5 h-5" />
               </button>
               <button onClick={() => setDarkMode(!darkMode)} className={'p-2 rounded-lg ' + (darkMode ? 'bg-gray-800 text-yellow-400 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')}>
@@ -1131,32 +808,14 @@ const App = () => {
           </div>
 
           <div className="flex gap-2 mb-4 overflow-x-auto">
-            <button
-              onClick={() => setActiveTab('all')}
-              className={'px-4 py-2 rounded-lg font-medium transition whitespace-nowrap ' + (activeTab === 'all' 
-                ? (darkMode ? 'bg-blue-500 text-white' : 'bg-blue-600 text-white')
-                : (darkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white border text-gray-700 hover:bg-gray-50')
-              )}
-            >
+            <button onClick={() => setActiveTab('all')} className={'px-4 py-2 rounded-lg font-medium transition whitespace-nowrap ' + (activeTab === 'all' ? (darkMode ? 'bg-blue-500 text-white' : 'bg-blue-600 text-white') : (darkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white border text-gray-700 hover:bg-gray-50'))}>
               Recent ({articles.filter(a => !a.archived).length})
             </button>
-            <button
-              onClick={() => setActiveTab('saved')}
-              className={'px-4 py-2 rounded-lg font-medium transition flex items-center gap-2 whitespace-nowrap ' + (activeTab === 'saved'
-                ? (darkMode ? 'bg-blue-500 text-white' : 'bg-blue-600 text-white')
-                : (darkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white border text-gray-700 hover:bg-gray-50')
-              )}
-            >
+            <button onClick={() => setActiveTab('saved')} className={'px-4 py-2 rounded-lg font-medium transition flex items-center gap-2 whitespace-nowrap ' + (activeTab === 'saved' ? (darkMode ? 'bg-blue-500 text-white' : 'bg-blue-600 text-white') : (darkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white border text-gray-700 hover:bg-gray-50'))}>
               <Heart className="w-4 h-4" fill={activeTab === 'saved' ? 'currentColor' : 'none'} />
               Saved ({savedArticles.length})
             </button>
-            <button
-              onClick={() => setActiveTab('archive')}
-              className={'px-4 py-2 rounded-lg font-medium transition flex items-center gap-2 whitespace-nowrap ' + (activeTab === 'archive'
-                ? (darkMode ? 'bg-blue-500 text-white' : 'bg-blue-600 text-white')
-                : (darkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white border text-gray-700 hover:bg-gray-50')
-              )}
-            >
+            <button onClick={() => setActiveTab('archive')} className={'px-4 py-2 rounded-lg font-medium transition flex items-center gap-2 whitespace-nowrap ' + (activeTab === 'archive' ? (darkMode ? 'bg-blue-500 text-white' : 'bg-blue-600 text-white') : (darkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white border text-gray-700 hover:bg-gray-50'))}>
               <Archive className="w-4 h-4" />
               Archive ({articles.filter(a => a.archived).length})
             </button>
@@ -1164,17 +823,8 @@ const App = () => {
 
           <div className="relative">
             <Search className={'absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 ' + (darkMode ? 'text-gray-500' : 'text-gray-400')} />
-            <input 
-              type="text" 
-              placeholder="Filter current articles..."
-              value={searchQuery} 
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className={'w-full pl-10 pr-32 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (darkMode ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900')} 
-            />
-            <button
-              onClick={addArticleByURL}
-              className={'absolute right-2 top-1/2 transform -translate-y-1/2 px-4 py-1.5 rounded-lg text-sm font-medium transition ' + (darkMode ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-blue-600 text-white hover:bg-blue-700')}
-            >
+            <input type="text" placeholder="Filter current articles..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className={'w-full pl-10 pr-32 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (darkMode ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900')} />
+            <button onClick={addArticleByURL} className={'absolute right-2 top-1/2 transform -translate-y-1/2 px-4 py-1.5 rounded-lg text-sm font-medium transition ' + (darkMode ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-blue-600 text-white hover:bg-blue-700')}>
               + Add Article
             </button>
           </div>
@@ -1184,8 +834,7 @@ const App = () => {
               <Filter className="w-4 h-4" />Filters
             </button>
             {activeCategories.slice(0, 10).map(cat => (
-              <button key={cat} onClick={() => setSelectedCategory(cat)}
-                className={'px-4 py-2 rounded-lg text-sm whitespace-nowrap ' + (selectedCategory === cat ? (darkMode ? 'bg-blue-500 text-white' : 'bg-blue-600 text-white') : (darkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white border text-gray-700 hover:bg-gray-50'))}>
+              <button key={cat} onClick={() => setSelectedCategory(cat)} className={'px-4 py-2 rounded-lg text-sm whitespace-nowrap ' + (selectedCategory === cat ? (darkMode ? 'bg-blue-500 text-white' : 'bg-blue-600 text-white') : (darkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white border text-gray-700 hover:bg-gray-50'))}>
                 {cat === 'all' ? 'All Topics' : cat}
               </button>
             ))}
@@ -1198,30 +847,32 @@ const App = () => {
 
           {showFilters && (
             <div className={'mt-4 p-4 rounded-xl ' + (darkMode ? 'bg-gray-800' : 'bg-white border')}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className={'font-semibold ' + (darkMode ? 'text-white' : 'text-gray-900')}>Filter Options</h3>
+                <button onClick={() => setShowFeedManager(true)} className={'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition ' + (darkMode ? 'bg-purple-500/10 text-purple-400 hover:bg-purple-500/20' : 'bg-purple-50 text-purple-700 hover:bg-purple-100')}>
+                  <Settings className="w-4 h-4" />
+                  Manage RSS Feeds
+                </button>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className={'block text-sm font-medium mb-2 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>Category</label>
-                  <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}
-                    className={'w-full px-3 py-2 rounded-lg border ' + (darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300')}>
+                  <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className={'w-full px-3 py-2 rounded-lg border ' + (darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300')}>
                     {categories.map(cat => <option key={cat} value={cat}>{cat === 'all' ? 'All Categories' : cat}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className={'block text-sm font-medium mb-2 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>Source</label>
-                  <select value={selectedSource} onChange={(e) => setSelectedSource(e.target.value)}
-                    className={'w-full px-3 py-2 rounded-lg border ' + (darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300')}>
+                  <select value={selectedSource} onChange={(e) => setSelectedSource(e.target.value)} className={'w-full px-3 py-2 rounded-lg border ' + (darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300')}>
                     {sources.map(s => {
-                      if (s === '---') {
-                        return <option key="separator" disabled>────────────</option>;
-                      }
+                      if (s === '---') return <option key="separator" disabled>────────────</option>;
                       return <option key={s} value={s}>{s === 'all' ? 'All Sources' : s}</option>;
                     })}
                   </select>
                 </div>
                 <div>
                   <label className={'block text-sm font-medium mb-2 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>Sort By</label>
-                  <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
-                    className={'w-full px-3 py-2 rounded-lg border ' + (darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300')}>
+                  <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className={'w-full px-3 py-2 rounded-lg border ' + (darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300')}>
                     <option value="date">Latest First</option>
                     <option value="trending">Trending</option>
                   </select>
@@ -1248,13 +899,9 @@ const App = () => {
                   <div className="flex items-center justify-between mb-1">
                     <span className={'font-medium text-sm ' + (darkMode ? 'text-white' : 'text-gray-900')}>{source}</span>
                     {info.status === 'success' ? (
-                      <span className={'px-2 py-0.5 rounded text-xs font-medium ' + (darkMode ? 'bg-green-500/20 text-green-400' : 'bg-green-100 text-green-700')}>
-                        ✓ Active
-                      </span>
+                      <span className={'px-2 py-0.5 rounded text-xs font-medium ' + (darkMode ? 'bg-green-500/20 text-green-400' : 'bg-green-100 text-green-700')}>✓ Active</span>
                     ) : (
-                      <span className={'px-2 py-0.5 rounded text-xs font-medium ' + (darkMode ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-700')}>
-                        ✗ Failed
-                      </span>
+                      <span className={'px-2 py-0.5 rounded text-xs font-medium ' + (darkMode ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-700')}>✗ Failed</span>
                     )}
                   </div>
                   {info.status === 'success' ? (
@@ -1286,9 +933,9 @@ const App = () => {
             <div className={'p-5 rounded-xl border ' + (darkMode ? 'bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-blue-500/30' : 'bg-gradient-to-br from-blue-50 to-purple-50 border-blue-200')}>
               <p className={'text-sm leading-relaxed ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>
                 {gistStatus === 'connected' ? (
-                  <>✅ <strong>Cloud Sync Active!</strong> Archives auto-backup to GitHub. {archivedArticles.length} archived articles. Archive tab now shows category chart automatically.</>
+                  <>✅ <strong>Cloud Sync Active!</strong> Archives auto-backup to GitHub. {archivedArticles.length} archived articles. Archive tab shows category chart. Click purple Filter icon to manage feeds.</>
                 ) : (
-                  <>Click the <strong>Cloud icon</strong> to enable GitHub backup. Archive tab will show category distribution chart when you have archived articles.</>
+                  <>Click the <strong>Cloud icon</strong> to enable GitHub backup. Click <strong>purple Filter icon</strong> to manage RSS feeds.</>
                 )} {articles.filter(a => !a.archived).length} articles, {archivedArticles.length} archived.
               </p>
             </div>
@@ -1396,26 +1043,17 @@ const App = () => {
               
               <div className={'flex items-center justify-between gap-2 mb-4 pb-4 border-b ' + (darkMode ? 'border-gray-700' : 'border-gray-200')}>
                 {!article.archived ? (
-                  <button
-                    onClick={() => archiveArticle(article.id)}
-                    className={'flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition ' + (darkMode ? 'bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20' : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100')}
-                  >
+                  <button onClick={() => archiveArticle(article.id)} className={'flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition ' + (darkMode ? 'bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20' : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100')}>
                     <Archive className="w-3.5 h-3.5" />
                     Archive
                   </button>
                 ) : (
-                  <button
-                    onClick={() => restoreArticle(article.id)}
-                    className={'flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition ' + (darkMode ? 'bg-green-500/10 text-green-400 hover:bg-green-500/20' : 'bg-green-50 text-green-700 hover:bg-green-100')}
-                  >
+                  <button onClick={() => restoreArticle(article.id)} className={'flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition ' + (darkMode ? 'bg-green-500/10 text-green-400 hover:bg-green-500/20' : 'bg-green-50 text-green-700 hover:bg-green-100')}>
                     <ArchiveRestore className="w-3.5 h-3.5" />
                     Restore
                   </button>
                 )}
-                <button
-                  onClick={() => deleteArticle(article.id)}
-                  className={'flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition ' + (darkMode ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20' : 'bg-red-50 text-red-700 hover:bg-red-100')}
-                >
+                <button onClick={() => deleteArticle(article.id)} className={'flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition ' + (darkMode ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20' : 'bg-red-50 text-red-700 hover:bg-red-100')}>
                   <Trash2 className="w-3.5 h-3.5" />
                   Delete
                 </button>
@@ -1439,8 +1077,7 @@ const App = () => {
 
         {filteredArticles.length > articlesPerPage && (
           <div className="flex justify-center mt-8">
-            <button onClick={() => setArticlesPerPage(prev => prev + 9)}
-              className={'flex items-center gap-2 px-6 py-3 rounded-lg font-medium hover:scale-105 transition ' + (darkMode ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-blue-600 text-white hover:bg-blue-700')}>
+            <button onClick={() => setArticlesPerPage(prev => prev + 9)} className={'flex items-center gap-2 px-6 py-3 rounded-lg font-medium hover:scale-105 transition ' + (darkMode ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-blue-600 text-white hover:bg-blue-700')}>
               <RefreshCw className="w-4 h-4" />Load More ({filteredArticles.length - articlesPerPage} remaining)
             </button>
           </div>
