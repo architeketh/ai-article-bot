@@ -26,8 +26,10 @@ const App = () => {
   const fileInputRef = useRef(null);
   const [feedStatus, setFeedStatus] = useState({});
   const [showFeedStatus, setShowFeedStatus] = useState(false);
+  const [showFeedManager, setShowFeedManager] = useState(false);
+  const [customFeeds, setCustomFeeds] = useState([]);
 
-  // Load Gist settings on mount
+  // Load custom feeds and Gist settings on mount
   useEffect(() => {
     const savedToken = localStorage.getItem('githubGistToken');
     const savedGistId = localStorage.getItem('githubGistId');
@@ -36,6 +38,16 @@ const App = () => {
       if (savedGistId) {
         setGistId(savedGistId);
         setGistStatus('connected');
+      }
+    }
+    
+    // Load custom feeds
+    const savedFeeds = localStorage.getItem('customFeeds');
+    if (savedFeeds) {
+      try {
+        setCustomFeeds(JSON.parse(savedFeeds));
+      } catch (e) {
+        console.error('Error loading custom feeds:', e);
       }
     }
   }, []);
@@ -221,14 +233,15 @@ const App = () => {
     }
   };
 
-  const RSS_FEEDS = [
+  const DEFAULT_RSS_FEEDS = [
     {
       url: 'https://www.archdaily.com/feed',
       category: 'Architecture News',
       source: 'ArchDaily',
       logo: '🏛️',
       priority: 1,
-      requireBoth: true
+      requireBoth: true,
+      enabled: true
     },
     {
       url: 'https://www.dezeen.com/feed/',
@@ -236,7 +249,8 @@ const App = () => {
       source: 'Dezeen',
       logo: '📐',
       priority: 1,
-      requireBoth: true
+      requireBoth: true,
+      enabled: true
     },
     {
       url: 'https://www.architectmagazine.com/rss',
@@ -244,7 +258,8 @@ const App = () => {
       source: 'Architect Magazine',
       logo: '📰',
       priority: 1,
-      requireBoth: true
+      requireBoth: true,
+      enabled: true
     },
     {
       url: 'https://architizer.com/blog/feed/',
@@ -252,47 +267,8 @@ const App = () => {
       source: 'Architizer',
       logo: '🏗️',
       priority: 1,
-      requireBoth: true
-    },
-    {
-      url: 'https://www.archdaily.com/search/all?q=rendering',
-      category: 'Rendering & Visualization',
-      source: 'ArchDaily Rendering',
-      logo: '🎨',
-      priority: 1,
-      requireBoth: false
-    },
-    {
-      url: 'https://www.archdaily.com/search/all?q=artificial+intelligence',
-      category: 'AI Tools',
-      source: 'ArchDaily AI',
-      logo: '🤖',
-      priority: 1,
-      requireBoth: false
-    },
-    {
-      url: 'https://www.cgarchitect.com/feed',
-      category: 'Rendering & Visualization',
-      source: 'CG Architect',
-      logo: '💻',
-      priority: 1,
-      requireBoth: false
-    },
-    {
-      url: 'https://www.grasshopper3d.com/forum/feed/feed:topics:new',
-      category: 'Parametric Tools',
-      source: 'Grasshopper3D',
-      logo: '🦗',
-      priority: 1,
-      requireBoth: false
-    },
-    {
-      url: 'https://www.autodesk.com/blogs/feed/',
-      category: 'Design Software',
-      source: 'Autodesk Blog',
-      logo: '🛠️',
-      priority: 1,
-      requireBoth: false
+      requireBoth: true,
+      enabled: true
     },
     {
       url: 'https://www.constructiondive.com/feeds/news/',
@@ -300,7 +276,8 @@ const App = () => {
       source: 'Construction Dive',
       logo: '👷',
       priority: 2,
-      requireBoth: true
+      requireBoth: true,
+      enabled: true
     },
     {
       url: 'https://www.architecturaldigest.com/feed/rss',
@@ -308,9 +285,62 @@ const App = () => {
       source: 'Architectural Digest',
       logo: '🏠',
       priority: 1,
-      requireBoth: false
+      requireBoth: false,
+      enabled: true
     }
   ];
+
+  const RSS_FEEDS = customFeeds.length > 0 ? customFeeds.filter(f => f.enabled) : DEFAULT_RSS_FEEDS.filter(f => f.enabled);
+
+  const addFeed = () => {
+    const url = prompt('Enter RSS feed URL:');
+    if (!url || !url.trim()) return;
+    
+    const source = prompt('Enter source name (e.g., "TechCrunch"):');
+    if (!source || !source.trim()) return;
+    
+    const category = prompt('Enter category (e.g., "Tech News"):');
+    const logo = prompt('Enter emoji logo (e.g., 📰):') || '📰';
+    
+    const newFeed = {
+      url: url.trim(),
+      source: source.trim(),
+      category: category?.trim() || 'General',
+      logo: logo,
+      priority: 1,
+      requireBoth: false,
+      enabled: true
+    };
+    
+    const updatedFeeds = [...(customFeeds.length > 0 ? customFeeds : DEFAULT_RSS_FEEDS), newFeed];
+    setCustomFeeds(updatedFeeds);
+    localStorage.setItem('customFeeds', JSON.stringify(updatedFeeds));
+    alert('✅ Feed added! Refresh to load articles from this feed.');
+  };
+
+  const toggleFeed = (index) => {
+    const feedsToUpdate = customFeeds.length > 0 ? [...customFeeds] : [...DEFAULT_RSS_FEEDS];
+    feedsToUpdate[index].enabled = !feedsToUpdate[index].enabled;
+    setCustomFeeds(feedsToUpdate);
+    localStorage.setItem('customFeeds', JSON.stringify(feedsToUpdate));
+  };
+
+  const deleteFeed = (index) => {
+    const feedsToUpdate = customFeeds.length > 0 ? [...customFeeds] : [...DEFAULT_RSS_FEEDS];
+    if (confirm(`Delete feed "${feedsToUpdate[index].source}"?`)) {
+      feedsToUpdate.splice(index, 1);
+      setCustomFeeds(feedsToUpdate);
+      localStorage.setItem('customFeeds', JSON.stringify(feedsToUpdate));
+    }
+  };
+
+  const resetFeeds = () => {
+    if (confirm('Reset to default feeds? This will remove all custom feeds.')) {
+      setCustomFeeds([]);
+      localStorage.removeItem('customFeeds');
+      alert('✅ Reset to defaults! Refresh to reload.');
+    }
+  };
 
   const categorizeArticle = (title, description, defaultCategory) => {
     const text = (title + ' ' + description).toLowerCase();
@@ -915,6 +945,7 @@ const App = () => {
       />
 
       {/* GitHub Gist Settings Modal */}
+      {/* GitHub Gist Settings Modal */}
       {showGistSettings && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className={'max-w-2xl w-full rounded-xl p-6 ' + (darkMode ? 'bg-gray-800' : 'bg-white')}>
@@ -1075,6 +1106,13 @@ const App = () => {
                 title="View feed status"
               >
                 <Settings className="w-5 h-5" />
+              </button>
+              <button 
+                onClick={() => setShowFeedManager(true)} 
+                className={'p-2 rounded-lg transition ' + (darkMode ? 'bg-gray-800 text-purple-400 hover:bg-gray-700' : 'bg-gray-100 text-purple-600 hover:bg-gray-200')}
+                title="Manage RSS feeds"
+              >
+                <Filter className="w-5 h-5" />
               </button>
               <button onClick={() => setDarkMode(!darkMode)} className={'p-2 rounded-lg ' + (darkMode ? 'bg-gray-800 text-yellow-400 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')}>
                 {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
