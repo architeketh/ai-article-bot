@@ -1155,7 +1155,6 @@ const App = () => {
           </div>
         )}
 
-        {/* Rest of the component remains the same - articles display */}
         {activeTab === 'saved' && savedArticles.length === 0 && (
           <div className={'text-center py-16 ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
             <Heart className="w-16 h-16 mx-auto mb-4 opacity-50" />
@@ -1185,6 +1184,31 @@ const App = () => {
                 <Tooltip contentStyle={{ backgroundColor: darkMode ? '#1f2937' : '#ffffff', border: '1px solid ' + (darkMode ? '#374151' : '#e5e7eb'), borderRadius: '8px' }} />
                 <Bar dataKey="count" radius={[0, 8, 8, 0]}>
                   {chartData.map((entry, index) => <Cell key={'cell-' + index} fill={colors[index % colors.length]} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {activeTab === 'archive' && archiveChartData.length > 0 && (
+          <div className={'mb-8 p-6 rounded-xl border ' + (darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className={'text-lg font-bold flex items-center gap-2 ' + (darkMode ? 'text-white' : 'text-gray-900')}>
+                <Archive className="w-5 h-5" />
+                Archived Articles by Category
+              </h2>
+              <span className={'text-sm ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
+                {archivedArticles.length} total archived
+              </span>
+            </div>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={archiveChartData} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? '#374151' : '#e5e7eb'} />
+                <XAxis type="number" tick={{ fill: darkMode ? '#9ca3af' : '#6b7280' }} />
+                <YAxis type="category" dataKey="name" width={180} tick={{ fill: darkMode ? '#9ca3af' : '#6b7280', fontSize: 13 }} />
+                <Tooltip contentStyle={{ backgroundColor: darkMode ? '#1f2937' : '#ffffff', border: '1px solid ' + (darkMode ? '#374151' : '#e5e7eb'), borderRadius: '8px' }} />
+                <Bar dataKey="count" radius={[0, 8, 8, 0]}>
+                  {archiveChartData.map((entry, index) => <Cell key={'cell-' + index} fill={colors[index % colors.length]} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
