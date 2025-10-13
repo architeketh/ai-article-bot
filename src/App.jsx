@@ -55,7 +55,9 @@ const App = () => {
     const savedFeeds = localStorage.getItem('customFeeds');
     if (savedFeeds) {
       try {
-        setCustomFeeds(JSON.parse(savedFeeds));
+        const parsedFeeds = JSON.parse(savedFeeds);
+        setCustomFeeds(parsedFeeds);
+        console.log('Loaded custom feeds:', parsedFeeds.length);
       } catch (e) {
         console.error('Error loading custom feeds:', e);
       }
@@ -419,6 +421,19 @@ const App = () => {
       setLoading(true);
       setError(null);
       try {
+        // Load custom feeds FIRST before fetching
+        const savedFeeds = localStorage.getItem('customFeeds');
+        let feedsToFetch = DEFAULT_RSS_FEEDS;
+        if (savedFeeds) {
+          try {
+            const parsedFeeds = JSON.parse(savedFeeds);
+            feedsToFetch = parsedFeeds.filter(f => f.enabled);
+            setCustomFeeds(parsedFeeds); // Update state too
+          } catch (e) {
+            console.error('Error loading custom feeds:', e);
+          }
+        }
+        
         const cachedArticles = JSON.parse(localStorage.getItem('cachedArticles') || '[]');
         const deletedArticles = JSON.parse(localStorage.getItem('deletedArticles') || '[]');
         if (cachedArticles.length > 0) {
@@ -430,7 +445,7 @@ const App = () => {
         const manualArticles = JSON.parse(localStorage.getItem('manualArticles') || '[]');
         const allArticles = [];
         const newFeedStatus = {};
-        for (const feed of RSS_FEEDS) {
+        for (const feed of feedsToFetch) {
           try {
             const response = await fetch('https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(feed.url) + '&api_key=q1ihf2w1uk1uwljssn3dngzhms9ajhqjpzfpqgf4&count=50');
             if (!response.ok) {
