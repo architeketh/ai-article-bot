@@ -142,7 +142,11 @@ const App = () => {
       const data = JSON.parse(fileContent);
       
       // Restore articles directly (they already include archived status)
-      setArticles(data.articles || []);
+      const restoredArticles = data.articles || [];
+      setArticles(restoredArticles);
+      
+      // CRITICAL: Cache the restored articles so they persist across page refreshes
+      localStorage.setItem('cachedArticles', JSON.stringify(restoredArticles));
       
       if (data.savedArticles) {
         setSavedArticles(data.savedArticles);
@@ -161,7 +165,9 @@ const App = () => {
 
       setGistStatus('connected');
       setGistError('');
-      alert('✅ Successfully loaded from GitHub Gist! Archived articles restored.');
+      
+      const archivedCount = restoredArticles.filter(a => a.archived).length;
+      alert(`✅ Successfully loaded from GitHub Gist!\n\n📊 Restored: ${restoredArticles.length} total articles\n📦 Archived: ${archivedCount} articles`);
     } catch (err) {
       console.error('Gist load error:', err);
       setGistStatus('error');
@@ -173,10 +179,16 @@ const App = () => {
   const saveGistSettings = async () => {
     if (gistToken) {
       localStorage.setItem('githubGistToken', gistToken);
+      
+      // Save Gist ID if provided
+      if (gistId && gistId.trim()) {
+        localStorage.setItem('githubGistId', gistId.trim());
+      }
+      
       setShowGistSettings(false);
       
       // First, try to load existing data from Gist
-      if (gistId) {
+      if (gistId && gistId.trim()) {
         setGistStatus('syncing');
         alert('🔄 Loading your archived articles from GitHub...');
         await loadFromGist();
@@ -924,6 +936,22 @@ const App = () => {
                 placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                 className={'w-full px-4 py-2 rounded-lg border font-mono text-sm ' + (darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300')}
               />
+            </div>
+
+            <div className="mb-4">
+              <label className={'block text-sm font-medium mb-2 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>
+                Gist ID (optional - leave blank for new Gist)
+              </label>
+              <input
+                type="text"
+                value={gistId}
+                onChange={(e) => setGistId(e.target.value)}
+                placeholder="abc123def456... (find in your GitHub Gists)"
+                className={'w-full px-4 py-2 rounded-lg border font-mono text-sm ' + (darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300')}
+              />
+              <p className={'text-xs mt-1 ' + (darkMode ? 'text-gray-500' : 'text-gray-600')}>
+                To restore from existing backup: Go to <a href="https://gist.github.com" target="_blank" className="text-blue-500 hover:underline">gist.github.com</a>, find "AI Architecture Articles Backup", copy the ID from the URL
+              </p>
             </div>
 
             {gistError && (
