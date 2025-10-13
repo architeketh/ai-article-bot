@@ -936,6 +936,13 @@ const App = () => {
 
   return (
     <div className={'min-h-screen transition-colors duration-300 ' + (darkMode ? 'bg-gray-900' : 'bg-gray-50')}>
+      {/* Debug indicator */}
+      {showFeedManager && (
+        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded z-[70]">
+          Feed Manager State: TRUE
+        </div>
+      )}
+      
       <input
         type="file"
         ref={fileInputRef}
@@ -1109,7 +1116,7 @@ const App = () => {
               </button>
               <button 
                 onClick={() => {
-                  console.log('Feed Manager button clicked');
+                  alert('Filter button clicked!');
                   setShowFeedManager(true);
                 }} 
                 className={'p-2 rounded-lg transition ' + (darkMode ? 'bg-gray-800 text-purple-400 hover:bg-gray-700' : 'bg-gray-100 text-purple-600 hover:bg-gray-200')}
