@@ -141,13 +141,7 @@ const App = () => {
 
       const data = JSON.parse(fileContent);
       
-      // Restore articles directly (they already include archived status)
-      const restoredArticles = data.articles || [];
-      setArticles(restoredArticles);
-      
-      // CRITICAL: Cache the restored articles so they persist across page refreshes
-      localStorage.setItem('cachedArticles', JSON.stringify(restoredArticles));
-      
+      // Restore to localStorage first (don't set state yet)
       if (data.savedArticles) {
         setSavedArticles(data.savedArticles);
         localStorage.setItem('savedArticles', JSON.stringify(data.savedArticles));
@@ -163,11 +157,22 @@ const App = () => {
         localStorage.setItem('deletedArticles', JSON.stringify(data.deletedArticles));
       }
 
+      // Restore manual articles
+      const manualArticles = (data.articles || []).filter(a => a.manual);
+      if (manualArticles.length > 0) {
+        localStorage.setItem('manualArticles', JSON.stringify(manualArticles));
+      }
+
       setGistStatus('connected');
       setGistError('');
       
-      const archivedCount = restoredArticles.filter(a => a.archived).length;
-      alert(`✅ Successfully loaded from GitHub Gist!\n\n📊 Restored: ${restoredArticles.length} total articles\n📦 Archived: ${archivedCount} articles`);
+      const archivedCount = (data.archivedArticles || []).length;
+      alert(`✅ Successfully loaded from GitHub Gist!\n\n📦 Restored: ${archivedCount} archived articles\n🔄 Now fetching fresh articles...`);
+      
+      // Trigger a fresh fetch to get NEW articles and merge with archived ones
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
     } catch (err) {
       console.error('Gist load error:', err);
       setGistStatus('error');
