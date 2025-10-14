@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Filter, Bookmark, TrendingUp, Clock, ExternalLink, Moon, Sun, Building2, BarChart3, Calendar, Sparkles, RefreshCw, AlertCircle, Heart, Archive, ArchiveRestore, Trash2, Download, Upload, Database, Cloud, CloudOff, Settings, Check, X } from 'lucide-react';
+import { Search, Filter, Bookmark, TrendingUp, Clock, ExternalLink, Moon, Sun, Building2, BarChart3, Calendar, Sparkles, RefreshCw, AlertCircle, Heart, Archive, ArchiveRestore, Trash2, Download, Upload, Database, Cloud, CloudOff, Settings, Check, X, Mail } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 const App = () => {
@@ -11,6 +11,7 @@ const App = () => {
   const [savedArticles, setSavedArticles] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
   const [showChart, setShowChart] = useState(true);
+  const [showArchiveChart, setShowArchiveChart] = useState(true);
   const [articlesPerPage, setArticlesPerPage] = useState(9);
   const [showWeeklySummary, setShowWeeklySummary] = useState(true);
   const [articles, setArticles] = useState([]);
@@ -41,6 +42,13 @@ const App = () => {
 
   const RSS_FEEDS = customFeeds.length > 0 ? customFeeds.filter(f => f.enabled) : DEFAULT_RSS_FEEDS.filter(f => f.enabled);
 
+  // Email feedback function
+  const sendFeedback = () => {
+    const subject = encodeURIComponent('AI Architecture Bot Feedback');
+    const body = encodeURIComponent(`Total Articles: ${articles.length}\nActive: ${articles.filter(a => !a.archived).length}\nArchived: ${articles.filter(a => a.archived).length}\nSaved: ${savedArticles.length}\n\nFeedback:\n`);
+    window.location.href = `mailto:architek.eth@gmail.com?subject=${subject}&body=${body}`;
+  };
+
   // Load custom feeds and Gist settings on mount
   useEffect(() => {
     const savedToken = localStorage.getItem('githubGistToken');
@@ -58,25 +66,21 @@ const App = () => {
       try {
         const parsedFeeds = JSON.parse(savedFeeds);
         setCustomFeeds(parsedFeeds);
-        console.log('Loaded custom feeds:', parsedFeeds.length);
       } catch (e) {
         console.error('Error loading custom feeds:', e);
       }
     }
 
-    // Fetch view counter - try multiple services
+    // Fetch view counter
     const fetchViewCount = async () => {
       try {
-        // Try CountAPI first
         const response = await fetch('https://api.countapi.xyz/hit/ai-architecture-news/visits');
         const data = await response.json();
-        console.log('View count:', data);
         if (data.value) {
           setViewCount(data.value);
         }
       } catch (err) {
         console.error('View counter error:', err);
-        // Fallback: use localStorage for session count
         const sessionViews = parseInt(localStorage.getItem('sessionViews') || '0') + 1;
         localStorage.setItem('sessionViews', sessionViews.toString());
         setViewCount(sessionViews);
@@ -87,7 +91,6 @@ const App = () => {
   }, []);
 
   const handleOpenFeedManager = () => {
-    console.log('Opening feed manager...');
     setShowFeedManager(true);
   };
 
@@ -155,8 +158,6 @@ const App = () => {
     }
   };
 
-  // ... rest of your code continues with syncToGist, loadFromGist, etc.
-  
   const syncToGist = async () => {
     if (!gistToken) return;
     try {
@@ -443,14 +444,13 @@ const App = () => {
       setLoading(true);
       setError(null);
       try {
-        // Load custom feeds FIRST before fetching
         const savedFeeds = localStorage.getItem('customFeeds');
         let feedsToFetch = DEFAULT_RSS_FEEDS;
         if (savedFeeds) {
           try {
             const parsedFeeds = JSON.parse(savedFeeds);
             feedsToFetch = parsedFeeds.filter(f => f.enabled);
-            setCustomFeeds(parsedFeeds); // Update state too
+            setCustomFeeds(parsedFeeds);
           } catch (e) {
             console.error('Error loading custom feeds:', e);
           }
@@ -804,6 +804,13 @@ const App = () => {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <button 
+                onClick={sendFeedback}
+                className={'p-2 rounded-lg transition ' + (darkMode ? 'bg-gray-800 text-purple-400 hover:bg-gray-700' : 'bg-gray-100 text-purple-600 hover:bg-gray-200')} 
+                title="Send feedback to architek.eth@gmail.com"
+              >
+                <Mail className="w-5 h-5" />
+              </button>
               <button onClick={() => setShowGistSettings(true)} className={'p-2 rounded-lg transition relative ' + (darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200') + ' ' + (gistStatus === 'connected' ? 'text-green-400' : gistStatus === 'syncing' ? 'text-blue-400' : gistStatus === 'error' ? 'text-red-400' : 'text-gray-400')} title={gistStatus === 'connected' ? 'Cloud sync enabled' : 'Setup cloud sync'}>
                 {gistStatus === 'connected' ? <Cloud className="w-5 h-5" /> : <CloudOff className="w-5 h-5" />}
                 {gistStatus === 'syncing' && (<span className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full animate-pulse"></span>)}
@@ -1030,7 +1037,7 @@ const App = () => {
                 <XAxis type="number" tick={{ fill: darkMode ? '#9ca3af' : '#6b7280' }} />
                 <YAxis type="category" dataKey="name" width={180} tick={{ fill: darkMode ? '#9ca3af' : '#6b7280', fontSize: 13 }} />
                 <Tooltip contentStyle={{ backgroundColor: darkMode ? '#1f2937' : '#ffffff', border: '1px solid ' + (darkMode ? '#374151' : '#e5e7eb'), borderRadius: '8px' }} />
-                <Bar dataKey="count" radius={[0, 8, 8, 0]}>
+                <Bar dataKey="count" radius={[0, 8, 8, 0]} barSize={10}>
                   {chartData.map((entry, index) => <Cell key={'cell-' + index} fill={colors[index % colors.length]} />)}
                 </Bar>
               </BarChart>
@@ -1038,16 +1045,14 @@ const App = () => {
           </div>
         )}
 
-        {activeTab === 'archive' && archiveChartData.length > 0 && (
+        {activeTab === 'archive' && showArchiveChart && archiveChartData.length > 0 && (
           <div className={'mb-8 p-6 rounded-xl border ' + (darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
             <div className="flex items-center justify-between mb-4">
               <h2 className={'text-lg font-bold flex items-center gap-2 ' + (darkMode ? 'text-white' : 'text-gray-900')}>
                 <Archive className="w-5 h-5" />
                 Archived Articles by Category
               </h2>
-              <span className={'text-sm ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
-                {archivedArticles.length} total archived
-              </span>
+              <button onClick={() => setShowArchiveChart(false)} className={'text-sm ' + (darkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-600 hover:text-gray-700')}>Hide</button>
             </div>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={archiveChartData} layout="vertical">
@@ -1055,7 +1060,7 @@ const App = () => {
                 <XAxis type="number" tick={{ fill: darkMode ? '#9ca3af' : '#6b7280' }} />
                 <YAxis type="category" dataKey="name" width={180} tick={{ fill: darkMode ? '#9ca3af' : '#6b7280', fontSize: 13 }} />
                 <Tooltip contentStyle={{ backgroundColor: darkMode ? '#1f2937' : '#ffffff', border: '1px solid ' + (darkMode ? '#374151' : '#e5e7eb'), borderRadius: '8px' }} />
-                <Bar dataKey="count" radius={[0, 8, 8, 0]}>
+                <Bar dataKey="count" radius={[0, 8, 8, 0]} barSize={10}>
                   {archiveChartData.map((entry, index) => <Cell key={'cell-' + index} fill={colors[index % colors.length]} />)}
                 </Bar>
               </BarChart>
@@ -1063,7 +1068,7 @@ const App = () => {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
           {filteredArticles.map(article => (
             <article key={article.id} className={'group rounded-lg p-4 border transition-all hover:shadow-xl hover:-translate-y-1 ' + (darkMode ? 'bg-gray-800 border-gray-700 hover:border-blue-500/50' : 'bg-white border-gray-200 hover:border-blue-300')}>
               <div className="flex items-start justify-between mb-2">
