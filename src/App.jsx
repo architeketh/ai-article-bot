@@ -470,9 +470,9 @@ const App = () => {
                 const title = item.title || '';
                 const description = item.description || '';
                 const text = (title + ' ' + description).toLowerCase();
-                const hasAI = /\b(ai|artificial intelligence|machine learning|generative|parametric|computational|midjourney|chatgpt|render.*ai|ai.*render)\b/i.test(text);
-                const hasArch = /\b(architect|design|building|construction|render|rendering|visualization|bim|3d.*model)\b/i.test(text);
-                const hasRendering = /\b(midjourney|dall-e|lookx|veras|enscape|lumion|render|rendering|visualization)\b/i.test(text);
+                const hasAI = /\b(ai|artificial intelligence|machine learning|generative|parametric|computational|midjourney|chatgpt|render.*ai|ai.*render|algorithm|neural)\b/i.test(text);
+                const hasArch = /\b(architect|design|building|construction|render|rendering|visualization|bim|3d.*model|structure|spatial)\b/i.test(text);
+                const hasRendering = /\b(midjourney|dall-e|lookx|veras|enscape|lumion|twinmotion|render|rendering|visualization|photorealistic)\b/i.test(text);
                 if (hasRendering) return true;
                 if (feed.requireBoth) return hasAI && hasArch;
                 return hasAI || hasArch;
@@ -503,6 +503,7 @@ const App = () => {
               newFeedStatus[feed.source] = { status: 'success', count: processedArticles.length, totalFetched: data.items.length };
             }
           } catch (feedError) {
+            console.error('Feed error:', feedError);
             newFeedStatus[feed.source] = { status: 'error', count: 0 };
           }
         }
@@ -523,8 +524,9 @@ const App = () => {
         });
         setArticles(combinedArticles);
         localStorage.setItem('cachedArticles', JSON.stringify(combinedArticles));
-        if (combinedArticles.length === 0) setError('No articles found');
+        if (combinedArticles.length === 0) setError('No articles found. Try refreshing.');
       } catch (err) {
+        console.error('Fetch error:', err);
         setError('Failed to load articles');
       } finally {
         setLoading(false);
@@ -614,8 +616,11 @@ const App = () => {
     return (
       <div className={'min-h-screen flex items-center justify-center ' + (darkMode ? 'bg-black' : 'bg-white')}>
         <div className="text-center">
-          <RefreshCw className={'w-16 h-16 animate-spin mx-auto mb-6 ' + (darkMode ? 'text-blue-500' : 'text-blue-600')} />
-          <p className={'text-xl font-light ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>Loading</p>
+          <div className="relative">
+            <RefreshCw className={'w-16 h-16 animate-spin mx-auto mb-6 ' + (darkMode ? 'text-blue-500' : 'text-blue-600')} />
+            <div className={'absolute inset-0 w-16 h-16 mx-auto rounded-full animate-ping opacity-20 ' + (darkMode ? 'bg-blue-500' : 'bg-blue-600')}></div>
+          </div>
+          <p className={'text-xl font-light animate-pulse ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>Discovering AI in Architecture</p>
         </div>
       </div>
     );
@@ -627,7 +632,7 @@ const App = () => {
         <div className="text-center">
           <AlertCircle className={'w-16 h-16 mx-auto mb-6 ' + (darkMode ? 'text-red-400' : 'text-red-600')} />
           <p className={'text-xl mb-6 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>{error}</p>
-          <button onClick={() => window.location.reload()} className="px-8 py-3 bg-blue-600 text-white rounded-full hover:bg-blue-700">Retry</button>
+          <button onClick={() => window.location.reload()} className="px-8 py-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-all hover:scale-105">Retry</button>
         </div>
       </div>
     );
@@ -639,26 +644,26 @@ const App = () => {
 
       {/* Feed Manager Modal */}
       {showFeedManager && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={() => setShowFeedManager(false)}>
-          <div className={'max-w-4xl w-full rounded-3xl p-8 shadow-2xl ' + (darkMode ? 'bg-gray-900' : 'bg-white')} onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn" onClick={() => setShowFeedManager(false)}>
+          <div className={'max-w-4xl w-full rounded-3xl p-8 shadow-2xl animate-slideUp ' + (darkMode ? 'bg-gradient-to-br from-gray-900 to-gray-800 border border-gray-700' : 'bg-white')} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
-              <h2 className={'text-2xl font-bold flex items-center gap-3 ' + (darkMode ? 'text-white' : 'text-gray-900')}>
-                <Filter className="w-7 h-7" />
+              <h2 className={'text-2xl font-bold flex items-center gap-3 bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent'}>
+                <Filter className="w-7 h-7 text-blue-500" />
                 RSS Feeds
               </h2>
-              <button onClick={() => setShowFeedManager(false)} className="p-2 rounded-full hover:bg-gray-800">
+              <button onClick={() => setShowFeedManager(false)} className="p-2 rounded-full hover:bg-gray-800 transition-all">
                 <X className="w-6 h-6" />
               </button>
             </div>
             
             <div className="mb-6 flex gap-3">
-              <button onClick={addFeed} className="px-6 py-3 rounded-full bg-green-500 text-white hover:bg-green-600">+ Add Feed</button>
-              <button onClick={resetFeeds} className={'px-6 py-3 rounded-full ' + (darkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-700')}>Reset</button>
+              <button onClick={addFeed} className="px-6 py-3 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-600 hover:to-emerald-600 transition-all hover:scale-105 shadow-lg">+ Add Feed</button>
+              <button onClick={resetFeeds} className={'px-6 py-3 rounded-full transition-all hover:scale-105 ' + (darkMode ? 'bg-orange-500/10 text-orange-400 hover:bg-orange-500/20' : 'bg-orange-50 text-orange-700')}>Reset</button>
             </div>
 
             <div className="space-y-3">
               {(customFeeds.length > 0 ? customFeeds : DEFAULT_RSS_FEEDS).map((feed, index) => (
-                <div key={index} className={'p-5 rounded-2xl flex items-center justify-between ' + (darkMode ? 'bg-gray-800' : 'bg-gray-50')}>
+                <div key={index} className={'p-5 rounded-2xl flex items-center justify-between transition-all hover:scale-[1.02] ' + (darkMode ? 'bg-gray-800/50 backdrop-blur-sm' : 'bg-gray-50')}>
                   <div className="flex items-center gap-4">
                     <span className="text-3xl">{feed.logo}</span>
                     <div>
@@ -667,10 +672,10 @@ const App = () => {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => toggleFeed(index)} className={'px-4 py-2 rounded-full text-xs ' + (feed.enabled ? 'bg-green-500/20 text-green-400' : 'bg-gray-600 text-gray-400')}>
+                    <button onClick={() => toggleFeed(index)} className={'px-4 py-2 rounded-full text-xs transition-all hover:scale-105 ' + (feed.enabled ? 'bg-green-500/20 text-green-400' : 'bg-gray-600 text-gray-400')}>
                       {feed.enabled ? 'Enabled' : 'Disabled'}
                     </button>
-                    <button onClick={() => deleteFeed(index)} className="p-2 rounded-full bg-red-500/10 text-red-400">
+                    <button onClick={() => deleteFeed(index)} className="p-2 rounded-full bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
@@ -683,34 +688,34 @@ const App = () => {
 
       {/* Gist Modal */}
       {showGistSettings && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className={'max-w-2xl w-full rounded-3xl p-8 shadow-2xl ' + (darkMode ? 'bg-gray-900' : 'bg-white')}>
+        <div className="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className={'max-w-2xl w-full rounded-3xl p-8 shadow-2xl animate-slideUp ' + (darkMode ? 'bg-gradient-to-br from-gray-900 to-gray-800 border border-gray-700' : 'bg-white')}>
             <div className="flex items-center justify-between mb-6">
-              <h2 className={'text-2xl font-bold flex items-center gap-3 ' + (darkMode ? 'text-white' : 'text-gray-900')}>
-                <Cloud className="w-7 h-7" />
+              <h2 className={'text-2xl font-bold flex items-center gap-3 bg-gradient-to-r from-blue-500 to-cyan-500 bg-clip-text text-transparent'}>
+                <Cloud className="w-7 h-7 text-blue-500" />
                 GitHub Sync
               </h2>
-              <button onClick={() => setShowGistSettings(false)} className="p-2 rounded-full hover:bg-gray-800">
+              <button onClick={() => setShowGistSettings(false)} className="p-2 rounded-full hover:bg-gray-800 transition-all">
                 <X className="w-6 h-6" />
               </button>
             </div>
 
             <div className="mb-5">
               <label className={'block text-sm mb-2 ' + (darkMode ? 'text-gray-400' : 'text-gray-700')}>GitHub Token</label>
-              <input type="password" value={gistToken} onChange={(e) => setGistToken(e.target.value)} className={'w-full px-4 py-3 rounded-2xl ' + (darkMode ? 'bg-gray-800 text-white' : 'bg-gray-100')} />
+              <input type="password" value={gistToken} onChange={(e) => setGistToken(e.target.value)} placeholder="ghp_..." className={'w-full px-4 py-3 rounded-2xl transition-all focus:ring-2 focus:ring-blue-500 ' + (darkMode ? 'bg-gray-800 text-white border border-gray-700' : 'bg-gray-100')} />
             </div>
 
             <div className="mb-6">
               <label className={'block text-sm mb-2 ' + (darkMode ? 'text-gray-400' : 'text-gray-700')}>Gist ID (optional)</label>
-              <input type="text" value={gistId} onChange={(e) => setGistId(e.target.value)} className={'w-full px-4 py-3 rounded-2xl ' + (darkMode ? 'bg-gray-800 text-white' : 'bg-gray-100')} />
+              <input type="text" value={gistId} onChange={(e) => setGistId(e.target.value)} placeholder="Leave blank for new" className={'w-full px-4 py-3 rounded-2xl transition-all focus:ring-2 focus:ring-blue-500 ' + (darkMode ? 'bg-gray-800 text-white border border-gray-700' : 'bg-gray-100')} />
             </div>
 
             <div className="flex gap-3">
-              <button onClick={saveGistSettings} disabled={!gistToken} className="flex-1 px-6 py-3 rounded-full bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50">
+              <button onClick={saveGistSettings} disabled={!gistToken} className="flex-1 px-6 py-3 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600 disabled:opacity-50 transition-all hover:scale-105 shadow-lg">
                 Save
               </button>
               {gistStatus === 'connected' && (
-                <button onClick={disconnectGist} className="px-6 py-3 rounded-full bg-red-500/10 text-red-400">Disconnect</button>
+                <button onClick={disconnectGist} className="px-6 py-3 rounded-full bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all">Disconnect</button>
               )}
             </div>
           </div>
@@ -718,73 +723,102 @@ const App = () => {
       )}
 
       {/* Header */}
-      <div className={'sticky top-0 z-40 backdrop-blur-2xl border-b ' + (darkMode ? 'bg-black/80 border-gray-900' : 'bg-white/80 border-gray-100')}>
+      <div className={'sticky top-0 z-40 backdrop-blur-2xl border-b transition-all ' + (darkMode ? 'bg-black/80 border-gray-900' : 'bg-white/80 border-gray-100')}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Top Bar */}
           <div className="flex items-center justify-between py-4">
-            <button onClick={() => setDarkMode(!darkMode)} className={'p-2.5 rounded-full ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800' : 'bg-gray-100 hover:bg-gray-200')}>
+            <button onClick={() => setDarkMode(!darkMode)} className={'p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800' : 'bg-gray-100 hover:bg-gray-200')}>
               {darkMode ? <Sun className="w-5 h-5 text-yellow-400" /> : <Moon className="w-5 h-5" />}
             </button>
             
             <div className="flex items-center gap-2">
-              <button onClick={sendFeedback} className={'p-2.5 rounded-full ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-purple-400' : 'bg-gray-100 hover:bg-gray-200 text-purple-600')} title="Email">
+              <button onClick={sendFeedback} className={'p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-purple-400' : 'bg-gray-100 hover:bg-gray-200 text-purple-600')} title="Email Feedback">
                 <Mail className="w-5 h-5" />
               </button>
               
-              <button onClick={() => setShowGistSettings(true)} className={'p-2.5 rounded-full relative ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800' : 'bg-gray-100 hover:bg-gray-200') + ' ' + (gistStatus === 'connected' ? 'text-green-400' : 'text-gray-400')}>
+              <button onClick={() => setShowGistSettings(true)} className={'p-2.5 rounded-full relative transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800' : 'bg-gray-100 hover:bg-gray-200') + ' ' + (gistStatus === 'connected' ? 'text-green-400' : 'text-gray-400')}>
                 {gistStatus === 'connected' ? <Cloud className="w-5 h-5" /> : <CloudOff className="w-5 h-5" />}
+                {gistStatus === 'syncing' && <span className="absolute top-0 right-0 w-2 h-2 bg-blue-500 rounded-full animate-ping"></span>}
               </button>
               
               <div className="relative">
-                <button onClick={() => setShowExportMenu(!showExportMenu)} className={'p-2.5 rounded-full ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-purple-400' : 'bg-gray-100 hover:bg-gray-200 text-purple-600')}>
+                <button onClick={() => setShowExportMenu(!showExportMenu)} className={'p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-purple-400' : 'bg-gray-100 hover:bg-gray-200 text-purple-600')}>
                   <Database className="w-5 h-5" />
                 </button>
                 {showExportMenu && (
-                  <div className={'absolute right-0 mt-2 w-56 rounded-2xl shadow-2xl p-2 z-50 ' + (darkMode ? 'bg-gray-900' : 'bg-white')}>
-                    <button onClick={() => exportData('all')} className={'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left ' + (darkMode ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100')}>
+                  <div className={'absolute right-0 mt-2 w-56 rounded-2xl shadow-2xl p-2 z-50 animate-slideUp ' + (darkMode ? 'bg-gray-900 border border-gray-800' : 'bg-white')}>
+                    <div className={'text-xs font-semibold mb-2 px-3 pt-2 ' + (darkMode ? 'text-gray-500' : 'text-gray-500')}>EXPORT</div>
+                    <button onClick={() => exportData('all')} className={'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all hover:scale-[1.02] ' + (darkMode ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100')}>
                       <Download className="w-4 h-4" />
-                      <span className="text-sm">Export All</span>
+                      <span className="text-sm">Complete Backup</span>
                     </button>
-                    <button onClick={() => fileInputRef.current?.click()} className={'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left ' + (darkMode ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100')}>
+                    <button onClick={() => exportData('archived')} className={'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all hover:scale-[1.02] ' + (darkMode ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100')}>
+                      <Download className="w-4 h-4" />
+                      <span className="text-sm">Archived Only</span>
+                    </button>
+                    <button onClick={() => exportData('saved')} className={'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all hover:scale-[1.02] ' + (darkMode ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100')}>
+                      <Download className="w-4 h-4" />
+                      <span className="text-sm">Saved Only</span>
+                    </button>
+                    <div className={'text-xs font-semibold my-2 px-3 pt-2 border-t ' + (darkMode ? 'text-gray-500 border-gray-800' : 'text-gray-500 border-gray-200')}>IMPORT</div>
+                    <button onClick={() => fileInputRef.current?.click()} className={'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all hover:scale-[1.02] ' + (darkMode ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100')}>
                       <Upload className="w-4 h-4" />
-                      <span className="text-sm">Import</span>
+                      <span className="text-sm">Import from File</span>
                     </button>
+                    {gistId && (
+                      <button onClick={() => { loadFromGist(); setShowExportMenu(false); }} className={'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all hover:scale-[1.02] ' + (darkMode ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100')}>
+                        <Cloud className="w-4 h-4" />
+                        <span className="text-sm">Load from GitHub</span>
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
               
-              <button onClick={() => window.location.reload()} className={'p-2.5 rounded-full ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-green-400' : 'bg-gray-100 hover:bg-gray-200 text-green-600')}>
+              <button onClick={() => window.location.reload()} className={'p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-green-400' : 'bg-gray-100 hover:bg-gray-200 text-green-600')}>
                 <RefreshCw className="w-5 h-5" />
               </button>
               
-              <button onClick={() => setShowChart(!showChart)} className={'p-2.5 rounded-full ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-blue-400' : 'bg-gray-100 hover:bg-gray-200 text-blue-600')}>
+              <button onClick={() => setShowChart(!showChart)} className={'p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-blue-400' : 'bg-gray-100 hover:bg-gray-200 text-blue-600')}>
                 <BarChart3 className="w-5 h-5" />
               </button>
               
-              <button onClick={() => setShowFeedStatus(!showFeedStatus)} className={'p-2.5 rounded-full ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-cyan-400' : 'bg-gray-100 hover:bg-gray-200 text-cyan-600')}>
+              <button onClick={() => setShowFeedStatus(!showFeedStatus)} className={'p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-cyan-400' : 'bg-gray-100 hover:bg-gray-200 text-cyan-600')}>
                 <Settings className="w-5 h-5" />
               </button>
               
-              <button onClick={handleOpenFeedManager} className={'p-2.5 rounded-full ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-purple-400' : 'bg-gray-100 hover:bg-gray-200 text-purple-600')}>
+              <button onClick={handleOpenFeedManager} className={'p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-purple-400' : 'bg-gray-100 hover:bg-gray-200 text-purple-600')}>
                 <Filter className="w-5 h-5" />
               </button>
             </div>
           </div>
 
-          {/* Hero */}
+          {/* Hero Section with Gradient */}
           <div className="text-center py-12">
-            <h1 className={'text-5xl md:text-7xl font-bold mb-4 tracking-tight ' + (darkMode ? 'text-white' : 'text-gray-900')}>
-              AI in Architecture
-            </h1>
+            <div className="relative inline-block">
+              <h1 className={'text-5xl md:text-7xl font-bold mb-4 tracking-tight bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 bg-clip-text text-transparent animate-gradient'}>
+                AI in Architecture
+              </h1>
+              <div className="absolute -inset-4 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 opacity-20 blur-3xl -z-10"></div>
+            </div>
             <p className={'text-lg md:text-xl font-light mb-2 ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
-              Latest innovations in design
+              Discover the latest innovations shaping design
             </p>
-            <div className={'flex items-center justify-center gap-4 text-sm ' + (darkMode ? 'text-gray-500' : 'text-gray-500')}>
-              <span>{articles.filter(a => !a.archived).length} articles</span>
+            <div className={'flex items-center justify-center gap-4 text-sm flex-wrap ' + (darkMode ? 'text-gray-500' : 'text-gray-500')}>
+              <span className="flex items-center gap-1">
+                <Sparkles className="w-4 h-4 text-blue-500" />
+                {articles.filter(a => !a.archived).length} articles
+              </span>
               <span>•</span>
-              <span>{trendingCount} trending</span>
+              <span className="flex items-center gap-1">
+                <TrendingUp className="w-4 h-4 text-orange-500" />
+                {trendingCount} trending
+              </span>
               <span>•</span>
-              <span>{savedArticles.length} saved</span>
+              <span className="flex items-center gap-1">
+                <Heart className="w-4 h-4 text-pink-500" />
+                {savedArticles.length} saved
+              </span>
               {viewCount && (
                 <>
                   <span>•</span>
@@ -794,52 +828,55 @@ const App = () => {
             </div>
           </div>
 
-          {/* Tabs */}
-          <div className="flex gap-2 mb-6">
-            <button onClick={() => setActiveTab('all')} className={'px-6 py-2.5 rounded-full font-medium ' + (activeTab === 'all' ? (darkMode ? 'bg-blue-500 text-white' : 'bg-blue-600 text-white') : (darkMode ? 'bg-gray-900 text-gray-400' : 'bg-gray-100 text-gray-700'))}>
+          {/* Tabs with Gradient Active State */}
+          <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+            <button onClick={() => setActiveTab('all')} className={'px-6 py-2.5 rounded-full font-medium transition-all hover:scale-105 ' + (activeTab === 'all' ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg' : (darkMode ? 'bg-gray-900 text-gray-400 hover:bg-gray-800' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'))}>
               Recent ({articles.filter(a => !a.archived).length})
             </button>
-            <button onClick={() => setActiveTab('saved')} className={'px-6 py-2.5 rounded-full font-medium flex items-center gap-2 ' + (activeTab === 'saved' ? (darkMode ? 'bg-blue-500 text-white' : 'bg-blue-600 text-white') : (darkMode ? 'bg-gray-900 text-gray-400' : 'bg-gray-100 text-gray-700'))}>
+            <button onClick={() => setActiveTab('saved')} className={'px-6 py-2.5 rounded-full font-medium flex items-center gap-2 transition-all hover:scale-105 whitespace-nowrap ' + (activeTab === 'saved' ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-lg' : (darkMode ? 'bg-gray-900 text-gray-400 hover:bg-gray-800' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'))}>
               <Heart className="w-4 h-4" fill={activeTab === 'saved' ? 'currentColor' : 'none'} />
               Saved ({savedArticles.length})
             </button>
-            <button onClick={() => setActiveTab('archive')} className={'px-6 py-2.5 rounded-full font-medium flex items-center gap-2 ' + (activeTab === 'archive' ? (darkMode ? 'bg-blue-500 text-white' : 'bg-blue-600 text-white') : (darkMode ? 'bg-gray-900 text-gray-400' : 'bg-gray-100 text-gray-700'))}>
+            <button onClick={() => setActiveTab('archive')} className={'px-6 py-2.5 rounded-full font-medium flex items-center gap-2 transition-all hover:scale-105 whitespace-nowrap ' + (activeTab === 'archive' ? 'bg-gradient-to-r from-orange-500 to-yellow-500 text-white shadow-lg' : (darkMode ? 'bg-gray-900 text-gray-400 hover:bg-gray-800' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'))}>
               <Archive className="w-4 h-4" />
-              Archive ({articles.filter(a => a.archived).length})
+              Archive ({archivedArticles.length})
             </button>
           </div>
 
-          {/* Search */}
+          {/* Search with Gradient Border */}
           <div className="relative mb-6">
-            <Search className={'absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 ' + (darkMode ? 'text-gray-600' : 'text-gray-400')} />
-            <input type="text" placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className={'w-full pl-14 pr-40 py-4 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (darkMode ? 'bg-gray-900 text-white' : 'bg-gray-50')} />
-            <button onClick={addArticleByURL} className="absolute right-2 top-1/2 -translate-y-1/2 px-6 py-2 rounded-full bg-blue-500 text-white hover:bg-blue-600">
-              + Add
-            </button>
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full opacity-20 blur-sm"></div>
+            <div className="relative">
+              <Search className={'absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 ' + (darkMode ? 'text-gray-600' : 'text-gray-400')} />
+              <input type="text" placeholder="Search articles..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className={'w-full pl-14 pr-40 py-4 rounded-full focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all ' + (darkMode ? 'bg-gray-900 text-white border border-gray-800' : 'bg-gray-50 border border-gray-200')} />
+              <button onClick={addArticleByURL} className="absolute right-2 top-1/2 -translate-y-1/2 px-6 py-2 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 transition-all hover:scale-105 shadow-lg">
+                + Add
+              </button>
+            </div>
           </div>
 
-          {/* Categories */}
+          {/* Category Pills with Hover Effects */}
           <div className="flex items-center gap-2 overflow-x-auto pb-6">
-            <button onClick={() => setShowFilters(!showFilters)} className={'flex items-center gap-2 px-5 py-2.5 rounded-full ' + (darkMode ? 'bg-gray-900 text-gray-400' : 'bg-gray-100')}>
+            <button onClick={() => setShowFilters(!showFilters)} className={'flex items-center gap-2 px-5 py-2.5 rounded-full transition-all hover:scale-105 ' + (darkMode ? 'bg-gray-900 text-gray-400 hover:bg-gray-800' : 'bg-gray-100 hover:bg-gray-200')}>
               <Filter className="w-4 h-4" />Filters
             </button>
             {activeCategories.slice(0, 8).map(cat => (
-              <button key={cat} onClick={() => setSelectedCategory(cat)} className={'px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap ' + (selectedCategory === cat ? (darkMode ? 'bg-blue-500 text-white' : 'bg-blue-600 text-white') : (darkMode ? 'bg-gray-900 text-gray-400' : 'bg-gray-100'))}>
+              <button key={cat} onClick={() => setSelectedCategory(cat)} className={'px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-all hover:scale-105 ' + (selectedCategory === cat ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg' : (darkMode ? 'bg-gray-900 text-gray-400 hover:bg-gray-800' : 'bg-gray-100 hover:bg-gray-200'))}>
                 {cat === 'all' ? 'All' : cat}
               </button>
             ))}
           </div>
 
           {showFilters && (
-            <div className={'mb-6 p-6 rounded-3xl ' + (darkMode ? 'bg-gray-900' : 'bg-gray-50')}>
+            <div className={'mb-6 p-6 rounded-3xl backdrop-blur-sm ' + (darkMode ? 'bg-gray-900/50 border border-gray-800' : 'bg-gray-50 border border-gray-200')}>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className={'w-full px-4 py-3 rounded-2xl ' + (darkMode ? 'bg-gray-800 text-white' : 'bg-white')}>
+                <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className={'w-full px-4 py-3 rounded-2xl transition-all focus:ring-2 focus:ring-purple-500 ' + (darkMode ? 'bg-gray-800 text-white border border-gray-700' : 'bg-white border border-gray-200')}>
                   {categories.map(cat => <option key={cat} value={cat}>{cat === 'all' ? 'All' : cat}</option>)}
                 </select>
-                <select value={selectedSource} onChange={(e) => setSelectedSource(e.target.value)} className={'w-full px-4 py-3 rounded-2xl ' + (darkMode ? 'bg-gray-800 text-white' : 'bg-white')}>
+                <select value={selectedSource} onChange={(e) => setSelectedSource(e.target.value)} className={'w-full px-4 py-3 rounded-2xl transition-all focus:ring-2 focus:ring-purple-500 ' + (darkMode ? 'bg-gray-800 text-white border border-gray-700' : 'bg-white border border-gray-200')}>
                   {sources.map(s => <option key={s} value={s}>{s === 'all' ? 'All Sources' : s}</option>)}
                 </select>
-                <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className={'w-full px-4 py-3 rounded-2xl ' + (darkMode ? 'bg-gray-800 text-white' : 'bg-white')}>
+                <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className={'w-full px-4 py-3 rounded-2xl transition-all focus:ring-2 focus:ring-purple-500 ' + (darkMode ? 'bg-gray-800 text-white border border-gray-700' : 'bg-white border border-gray-200')}>
                   <option value="date">Latest</option>
                   <option value="trending">Trending</option>
                 </select>
@@ -852,19 +889,19 @@ const App = () => {
       {/* Main */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {showFeedStatus && (
-          <div className={'mb-8 p-6 rounded-3xl ' + (darkMode ? 'bg-gray-900' : 'bg-white')}>
+          <div className={'mb-8 p-6 rounded-3xl border backdrop-blur-sm ' + (darkMode ? 'bg-gray-900/50 border-gray-800' : 'bg-white border-gray-200')}>
             <div className="flex items-center justify-between mb-6">
               <h2 className={'text-xl font-bold flex items-center gap-3 ' + (darkMode ? 'text-white' : 'text-gray-900')}>
-                <Settings className="w-6 h-6" />
+                <Settings className="w-6 h-6 text-cyan-500" />
                 Feed Status
               </h2>
-              <button onClick={() => setShowFeedStatus(false)} className={'text-sm ' + (darkMode ? 'text-gray-500' : 'text-gray-600')}>Hide</button>
+              <button onClick={() => setShowFeedStatus(false)} className={'text-sm ' + (darkMode ? 'text-gray-500 hover:text-gray-400' : 'text-gray-600 hover:text-gray-700')}>Hide</button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {RSS_FEEDS.map((feed) => {
                 const info = feedStatus[feed.source] || { status: 'pending', count: 0 };
                 return (
-                  <div key={feed.source} className={'p-4 rounded-2xl ' + (darkMode ? 'bg-gray-800' : 'bg-gray-50')}>
+                  <div key={feed.source} className={'p-4 rounded-2xl transition-all hover:scale-[1.02] ' + (darkMode ? 'bg-gray-800/50' : 'bg-gray-50')}>
                     <div className="flex items-center justify-between mb-2">
                       <span className={'font-semibold text-sm ' + (darkMode ? 'text-white' : 'text-gray-900')}>{feed.source}</span>
                       {info.status === 'success' ? (
@@ -874,7 +911,7 @@ const App = () => {
                       )}
                     </div>
                     <p className={'text-xs ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
-                      {info.status === 'success' ? `${info.count} articles` : 'Failed'}
+                      {info.status === 'success' ? `Fetched: ${info.totalFetched} → Filtered: ${info.count}` : 'Failed'}
                     </p>
                   </div>
                 );
@@ -898,17 +935,17 @@ const App = () => {
         )}
 
         {activeTab === 'all' && showChart && chartData.length > 0 && (
-          <div className={'mb-8 p-6 rounded-3xl ' + (darkMode ? 'bg-gray-900' : 'bg-white')}>
+          <div className={'mb-8 p-6 rounded-3xl border backdrop-blur-sm ' + (darkMode ? 'bg-gray-900/50 border-gray-800' : 'bg-white border-gray-200')}>
             <div className="flex items-center justify-between mb-6">
               <h2 className={'text-xl font-bold ' + (darkMode ? 'text-white' : 'text-gray-900')}>Categories</h2>
-              <button onClick={() => setShowChart(false)} className={'text-sm ' + (darkMode ? 'text-gray-500' : 'text-gray-600')}>Hide</button>
+              <button onClick={() => setShowChart(false)} className={'text-sm ' + (darkMode ? 'text-gray-500 hover:text-gray-400' : 'text-gray-600 hover:text-gray-700')}>Hide</button>
             </div>
             <ResponsiveContainer width="100%" height={chartData.length * 30 + 50}>
               <BarChart data={chartData} layout="vertical" barCategoryGap={2}>
                 <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? '#1f2937' : '#f3f4f6'} />
                 <XAxis type="number" tick={{ fill: darkMode ? '#6b7280' : '#9ca3af', fontSize: 12 }} />
                 <YAxis type="category" dataKey="name" width={170} tick={{ fill: darkMode ? '#9ca3af' : '#6b7280', fontSize: 12 }} />
-                <Tooltip contentStyle={{ backgroundColor: darkMode ? '#111827' : '#ffffff', borderRadius: '12px', fontSize: '13px' }} />
+                <Tooltip contentStyle={{ backgroundColor: darkMode ? '#111827' : '#ffffff', borderRadius: '12px', fontSize: '13px', border: 'none', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }} />
                 <Bar dataKey="count" radius={[0, 6, 6, 0]} barSize={8}>
                   {chartData.map((entry, index) => <Cell key={index} fill={colors[index % colors.length]} />)}
                 </Bar>
@@ -918,20 +955,20 @@ const App = () => {
         )}
 
         {activeTab === 'archive' && showArchiveChart && archiveChartData.length > 0 && (
-          <div className={'mb-8 p-6 rounded-3xl ' + (darkMode ? 'bg-gray-900' : 'bg-white')}>
+          <div className={'mb-8 p-6 rounded-3xl border backdrop-blur-sm ' + (darkMode ? 'bg-gray-900/50 border-gray-800' : 'bg-white border-gray-200')}>
             <div className="flex items-center justify-between mb-6">
               <h2 className={'text-xl font-bold flex items-center gap-3 ' + (darkMode ? 'text-white' : 'text-gray-900')}>
-                <Archive className="w-6 h-6" />
+                <Archive className="w-6 h-6 text-orange-500" />
                 Archived
               </h2>
-              <button onClick={() => setShowArchiveChart(false)} className={'text-sm ' + (darkMode ? 'text-gray-500' : 'text-gray-600')}>Hide</button>
+              <button onClick={() => setShowArchiveChart(false)} className={'text-sm ' + (darkMode ? 'text-gray-500 hover:text-gray-400' : 'text-gray-600 hover:text-gray-700')}>Hide</button>
             </div>
             <ResponsiveContainer width="100%" height={archiveChartData.length * 30 + 50}>
               <BarChart data={archiveChartData} layout="vertical" barCategoryGap={2}>
                 <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? '#1f2937' : '#f3f4f6'} />
                 <XAxis type="number" tick={{ fill: darkMode ? '#6b7280' : '#9ca3af', fontSize: 12 }} />
                 <YAxis type="category" dataKey="name" width={170} tick={{ fill: darkMode ? '#9ca3af' : '#6b7280', fontSize: 12 }} />
-                <Tooltip contentStyle={{ backgroundColor: darkMode ? '#111827' : '#ffffff', borderRadius: '12px', fontSize: '13px' }} />
+                <Tooltip contentStyle={{ backgroundColor: darkMode ? '#111827' : '#ffffff', borderRadius: '12px', fontSize: '13px', border: 'none', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }} />
                 <Bar dataKey="count" radius={[0, 6, 6, 0]} barSize={8}>
                   {archiveChartData.map((entry, index) => <Cell key={index} fill={colors[index % colors.length]} />)}
                 </Bar>
@@ -940,16 +977,16 @@ const App = () => {
           </div>
         )}
 
-        {/* Articles - 3 columns */}
+        {/* Articles - 3 columns with hover effects */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredArticles.map(article => (
-            <article key={article.id} className={'group rounded-3xl p-5 border transition-all hover:shadow-2xl hover:-translate-y-1 ' + (darkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200')}>
+            <article key={article.id} className={'group rounded-3xl p-5 border transition-all hover:shadow-2xl hover:-translate-y-2 ' + (darkMode ? 'bg-gradient-to-br from-gray-900 to-gray-800 border-gray-800 hover:border-gray-700' : 'bg-white border-gray-200 hover:border-gray-300')}>
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <span className="text-xl">{article.sourceLogo}</span>
                   <span className={'text-xs ' + (darkMode ? 'text-gray-500' : 'text-gray-600')}>{article.source}</span>
                 </div>
-                <button onClick={() => toggleSave(article.id)} className={savedArticles.includes(article.id) ? 'text-yellow-500' : (darkMode ? 'text-gray-600' : 'text-gray-400')}>
+                <button onClick={() => toggleSave(article.id)} className={'relative transition-all hover:scale-110 ' + (savedArticles.includes(article.id) ? 'text-yellow-500' : (darkMode ? 'text-gray-600' : 'text-gray-400'))}>
                   <Bookmark className="w-4 h-4" fill={savedArticles.includes(article.id) ? 'currentColor' : 'none'} />
                 </button>
               </div>
@@ -970,33 +1007,33 @@ const App = () => {
                 </div>
               )}
               
-              <h2 className={'text-base font-bold mb-3 line-clamp-2 group-hover:text-blue-500 ' + (darkMode ? 'text-white' : 'text-gray-900')}>{article.title}</h2>
+              <h2 className={'text-base font-bold mb-3 line-clamp-2 group-hover:bg-gradient-to-r group-hover:from-blue-500 group-hover:to-purple-500 group-hover:bg-clip-text group-hover:text-transparent transition-all ' + (darkMode ? 'text-white' : 'text-gray-900')}>{article.title}</h2>
               <p className={'text-xs mb-3 line-clamp-2 ' + (darkMode ? 'text-gray-500' : 'text-gray-600')}>{article.summary}</p>
               
               {article.keywords.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mb-3">
-                  {article.keywords.slice(0, 3).map((kw, i) => <span key={i} className={'px-2 py-1 rounded-full text-xs ' + (darkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100')}>{kw}</span>)}
+                  {article.keywords.slice(0, 3).map((kw, i) => <span key={i} className={'px-2 py-1 rounded-full text-xs transition-all hover:scale-105 ' + (darkMode ? 'bg-gray-800 text-gray-400 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200')}>{kw}</span>)}
                 </div>
               )}
               
               <div className="flex flex-wrap gap-2 mb-4">
-                <span className={'px-2.5 py-1 rounded-full text-xs ' + (darkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-700')}>{article.category}</span>
-                {article.trending && <span className={'px-2.5 py-1 rounded-full text-xs flex items-center gap-1 ' + (darkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-700')}><TrendingUp className="w-3 h-3" />Hot</span>}
+                <span className={'px-2.5 py-1 rounded-full text-xs transition-all ' + (darkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-700')}>{article.category}</span>
+                {article.trending && <span className={'px-2.5 py-1 rounded-full text-xs flex items-center gap-1 animate-pulse ' + (darkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-700')}><TrendingUp className="w-3 h-3" />Hot</span>}
               </div>
               
               <div className={'flex items-center justify-between gap-2 mb-4 pb-4 border-b ' + (darkMode ? 'border-gray-800' : 'border-gray-200')}>
                 {!article.archived ? (
-                  <button onClick={() => archiveArticle(article.id)} className={'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs ' + (darkMode ? 'bg-yellow-500/10 text-yellow-400' : 'bg-yellow-50 text-yellow-700')}>
+                  <button onClick={() => archiveArticle(article.id)} className={'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-all hover:scale-105 ' + (darkMode ? 'bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20' : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100')}>
                     <Archive className="w-3 h-3" />
                     Archive
                   </button>
                 ) : (
-                  <button onClick={() => restoreArticle(article.id)} className={'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs ' + (darkMode ? 'bg-green-500/10 text-green-400' : 'bg-green-50 text-green-700')}>
+                  <button onClick={() => restoreArticle(article.id)} className={'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-all hover:scale-105 ' + (darkMode ? 'bg-green-500/10 text-green-400 hover:bg-green-500/20' : 'bg-green-50 text-green-700 hover:bg-green-100')}>
                     <ArchiveRestore className="w-3 h-3" />
                     Restore
                   </button>
                 )}
-                <button onClick={() => deleteArticle(article.id)} className={'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs ' + (darkMode ? 'bg-red-500/10 text-red-400' : 'bg-red-50 text-red-700')}>
+                <button onClick={() => deleteArticle(article.id)} className={'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-all hover:scale-105 ' + (darkMode ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20' : 'bg-red-50 text-red-700 hover:bg-red-100')}>
                   <Trash2 className="w-3 h-3" />
                   Delete
                 </button>
@@ -1010,7 +1047,7 @@ const App = () => {
                     {activeTab === 'archive' ? new Date(article.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : getRelativeTime(article.date)}
                   </span>
                 </div>
-                <a href={article.url} target="_blank" rel="noopener noreferrer" className={'flex items-center gap-1 text-xs ' + (darkMode ? 'text-blue-400' : 'text-blue-600')}>
+                <a href={article.url} target="_blank" rel="noopener noreferrer" className={'flex items-center gap-1 text-xs transition-all hover:scale-105 ' + (darkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700')}>
                   Read<ExternalLink className="w-3 h-3" />
                 </a>
               </div>
@@ -1025,6 +1062,32 @@ const App = () => {
           </div>
         )}
       </main>
+
+      {/* Add CSS for animations */}
+      <style>{`
+        @keyframes gradient {
+          0%, 100% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+        }
+        .animate-gradient {
+          background-size: 200% auto;
+          animation: gradient 3s ease infinite;
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.2s ease-out;
+        }
+        @keyframes slideUp {
+          from { transform: translateY(20px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+        .animate-slideUp {
+          animation: slideUp 0.3s ease-out;
+        }
+      `}</style>
     </div>
   );
 };
