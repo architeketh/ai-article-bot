@@ -622,6 +622,18 @@ const App = () => {
   });
 
   const trendingCount = articles.filter(a => a.trending && !a.archived).length;
+  
+  // Count articles added today
+  const getArticlesAddedToday = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return articles.filter(a => {
+      const articleDate = new Date(a.date);
+      articleDate.setHours(0, 0, 0, 0);
+      return articleDate.getTime() === today.getTime() && !a.archived;
+    }).length;
+  };
+  const newTodayCount = getArticlesAddedToday();
 
   if (loading) {
     return (
@@ -816,6 +828,15 @@ const App = () => {
               Discover the latest innovations shaping design
             </p>
             <div className={'flex items-center justify-center gap-4 text-sm flex-wrap ' + (darkMode ? 'text-gray-500' : 'text-gray-500')}>
+              {newTodayCount > 0 && (
+                <>
+                  <span className="flex items-center gap-1 px-3 py-1 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold animate-pulse">
+                    <Sparkles className="w-4 h-4" />
+                    {newTodayCount} new today
+                  </span>
+                  <span>•</span>
+                </>
+              )}
               <span className="flex items-center gap-1">
                 <Sparkles className="w-4 h-4 text-blue-500" />
                 {articles.filter(a => !a.archived).length} articles
