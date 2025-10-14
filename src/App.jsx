@@ -64,13 +64,26 @@ const App = () => {
       }
     }
 
-    // Fetch view counter
-    fetch('https://api.countapi.xyz/hit/ai-architecture-news/visits')
-      .then(res => res.json())
-      .then(data => {
-        setViewCount(data.value);
-      })
-      .catch(err => console.error('View counter error:', err));
+    // Fetch view counter - try multiple services
+    const fetchViewCount = async () => {
+      try {
+        // Try CountAPI first
+        const response = await fetch('https://api.countapi.xyz/hit/ai-architecture-news/visits');
+        const data = await response.json();
+        console.log('View count:', data);
+        if (data.value) {
+          setViewCount(data.value);
+        }
+      } catch (err) {
+        console.error('View counter error:', err);
+        // Fallback: use localStorage for session count
+        const sessionViews = parseInt(localStorage.getItem('sessionViews') || '0') + 1;
+        localStorage.setItem('sessionViews', sessionViews.toString());
+        setViewCount(sessionViews);
+      }
+    };
+    
+    fetchViewCount();
   }, []);
 
   const handleOpenFeedManager = () => {
@@ -784,9 +797,11 @@ const App = () => {
               </div>
               <div>
                 <h1 className={'text-2xl font-bold ' + (darkMode ? 'text-white' : 'text-gray-900')}>AI in Architecture</h1>
-                <p className={'text-sm ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
-                  {articles.filter(a => !a.archived).length} articles · {trendingCount} trending · {savedArticles.length} saved
-                  {viewCount !== null && <> · 👁️ {viewCount.toLocaleString()} views</>}
+                <p className={'text-sm flex items-center gap-2 ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
+                  <span>{articles.filter(a => !a.archived).length} articles · {trendingCount} trending · {savedArticles.length} saved</span>
+                  <span className="flex items-center gap-1">
+                    · 👁️ <img src="https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Farchiteketh.github.io%2Fai-article-bot&count_bg=%233B82F6&title_bg=%23374151&icon=&icon_color=%23E7E7E7&title=views&edge_flat=false" alt="views" className="inline-block" style={{ height: '20px' }} />
+                  </span>
                 </p>
               </div>
             </div>
