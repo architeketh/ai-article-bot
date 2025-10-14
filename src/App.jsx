@@ -1064,7 +1064,7 @@ const App = () => {
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredArticles.slice(0, articlesPerPage).map(article => (
+          {filteredArticles.map(article => (
             <article key={article.id} className={'group rounded-lg p-4 border transition-all hover:shadow-xl hover:-translate-y-1 ' + (darkMode ? 'bg-gray-800 border-gray-700 hover:border-blue-500/50' : 'bg-white border-gray-200 hover:border-blue-300')}>
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center gap-1.5">
@@ -1135,14 +1135,6 @@ const App = () => {
             </article>
           ))}
         </div>
-
-        {filteredArticles.length > articlesPerPage && (
-          <div className="flex justify-center mt-8">
-            <button onClick={() => setArticlesPerPage(prev => prev + 9)} className={'flex items-center gap-2 px-6 py-3 rounded-lg font-medium hover:scale-105 transition ' + (darkMode ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-blue-600 text-white hover:bg-blue-700')}>
-              <RefreshCw className="w-4 h-4" />Load More ({filteredArticles.length - articlesPerPage} remaining)
-            </button>
-          </div>
-        )}
 
         {filteredArticles.length === 0 && !loading && (
           <div className={'text-center py-16 ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
