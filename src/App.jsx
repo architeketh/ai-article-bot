@@ -797,11 +797,9 @@ const App = () => {
               </div>
               <div>
                 <h1 className={'text-2xl font-bold ' + (darkMode ? 'text-white' : 'text-gray-900')}>AI in Architecture</h1>
-                <p className={'text-sm flex items-center gap-2 ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
-                  <span>{articles.filter(a => !a.archived).length} articles · {trendingCount} trending · {savedArticles.length} saved</span>
-                  <span className="flex items-center gap-1">
-                    · 👁️ <img src="https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Farchiteketh.github.io%2Fai-article-bot&count_bg=%233B82F6&title_bg=%23374151&icon=&icon_color=%23E7E7E7&title=views&edge_flat=false" alt="views" className="inline-block" style={{ height: '20px' }} />
-                  </span>
+                <p className={'text-sm ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
+                  {articles.filter(a => !a.archived).length} articles · {trendingCount} trending · {savedArticles.length} saved
+                  {viewCount !== null && <> · 👁️ {viewCount.toLocaleString()} views</>}
                 </p>
               </div>
             </div>
