@@ -563,7 +563,9 @@ const App = () => {
   };
   const activeCategories = getActiveCategoriesForTab();
   const allSources = [...new Set(articles.map(a => a.source))].filter(Boolean);
-  const sources = ['all', ...allSources.sort()];
+  const manualSource = allSources.find(s => s === 'Manual Addition');
+  const otherSources = allSources.filter(s => s !== 'Manual Addition').sort();
+  const sources = ['all', ...(manualSource ? [manualSource, '---'] : []), ...otherSources];
 
   const getCategoryData = () => {
     const categoryCount = {};
@@ -874,7 +876,10 @@ const App = () => {
                   {categories.map(cat => <option key={cat} value={cat}>{cat === 'all' ? 'All' : cat}</option>)}
                 </select>
                 <select value={selectedSource} onChange={(e) => setSelectedSource(e.target.value)} className={'w-full px-4 py-3 rounded-2xl transition-all focus:ring-2 focus:ring-purple-500 ' + (darkMode ? 'bg-gray-800 text-white border border-gray-700' : 'bg-white border border-gray-200')}>
-                  {sources.map(s => <option key={s} value={s}>{s === 'all' ? 'All Sources' : s}</option>)}
+                  {sources.map(s => {
+                    if (s === '---') return <option key="separator" disabled>────────────</option>;
+                    return <option key={s} value={s}>{s === 'all' ? 'All Sources' : s}</option>;
+                  })}
                 </select>
                 <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className={'w-full px-4 py-3 rounded-2xl transition-all focus:ring-2 focus:ring-purple-500 ' + (darkMode ? 'bg-gray-800 text-white border border-gray-700' : 'bg-white border border-gray-200')}>
                   <option value="date">Latest</option>
