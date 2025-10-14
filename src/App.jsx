@@ -28,6 +28,7 @@ const App = () => {
   const [showFeedStatus, setShowFeedStatus] = useState(false);
   const [showFeedManager, setShowFeedManager] = useState(false);
   const [customFeeds, setCustomFeeds] = useState([]);
+  const [viewCount, setViewCount] = useState(null);
 
   const DEFAULT_RSS_FEEDS = [
     { url: 'https://www.archdaily.com/feed', category: 'Architecture News', source: 'ArchDaily', logo: '🏛️', priority: 1, requireBoth: true, enabled: true },
@@ -62,6 +63,14 @@ const App = () => {
         console.error('Error loading custom feeds:', e);
       }
     }
+
+    // Fetch view counter
+    fetch('https://api.countapi.xyz/hit/ai-architecture-news/visits')
+      .then(res => res.json())
+      .then(data => {
+        setViewCount(data.value);
+      })
+      .catch(err => console.error('View counter error:', err));
   }, []);
 
   const handleOpenFeedManager = () => {
@@ -777,6 +786,7 @@ const App = () => {
                 <h1 className={'text-2xl font-bold ' + (darkMode ? 'text-white' : 'text-gray-900')}>AI in Architecture</h1>
                 <p className={'text-sm ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
                   {articles.filter(a => !a.archived).length} articles · {trendingCount} trending · {savedArticles.length} saved
+                  {viewCount !== null && <> · 👁️ {viewCount.toLocaleString()} views</>}
                 </p>
               </div>
             </div>
