@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Filter, Bookmark, TrendingUp, Clock, ExternalLink, Moon, Sun, Building2, BarChart3, Calendar, Sparkles, RefreshCw, AlertCircle, Heart, Archive, ArchiveRestore, Trash2, Download, Upload, Database, Cloud, CloudOff, Settings, Check, X } from 'lucide-react';
+import { Search, Filter, Bookmark, TrendingUp, Clock, ExternalLink, Moon, Sun, Building2, BarChart3, Calendar, Sparkles, RefreshCw, AlertCircle, Heart, Archive, ArchiveRestore, Trash2, Download, Upload, Database, Cloud, CloudOff, Settings, Check, X, Mail } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 const App = () => {
@@ -11,8 +11,7 @@ const App = () => {
   const [savedArticles, setSavedArticles] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
   const [showChart, setShowChart] = useState(true);
-  const [articlesPerPage, setArticlesPerPage] = useState(9);
-  const [showWeeklySummary, setShowWeeklySummary] = useState(true);
+  const [showWeeklySummary, setShowWeeklySummary] = useState(false);
   const [articles, setArticles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -41,7 +40,6 @@ const App = () => {
 
   const RSS_FEEDS = customFeeds.length > 0 ? customFeeds.filter(f => f.enabled) : DEFAULT_RSS_FEEDS.filter(f => f.enabled);
 
-  // Load custom feeds and Gist settings on mount
   useEffect(() => {
     const savedToken = localStorage.getItem('githubGistToken');
     const savedGistId = localStorage.getItem('githubGistId');
@@ -58,66 +56,37 @@ const App = () => {
       try {
         const parsedFeeds = JSON.parse(savedFeeds);
         setCustomFeeds(parsedFeeds);
-        console.log('Loaded custom feeds:', parsedFeeds.length);
       } catch (e) {
         console.error('Error loading custom feeds:', e);
       }
     }
 
-    // Fetch view counter - try multiple services
     const fetchViewCount = async () => {
       try {
-        // Try CountAPI first
         const response = await fetch('https://api.countapi.xyz/hit/ai-architecture-news/visits');
         const data = await response.json();
-        console.log('View count:', data);
-        if (data.value) {
-          setViewCount(data.value);
-        }
+        if (data.value) setViewCount(data.value);
       } catch (err) {
         console.error('View counter error:', err);
-        // Fallback: use localStorage for session count
-        const sessionViews = parseInt(localStorage.getItem('sessionViews') || '0') + 1;
-        localStorage.setItem('sessionViews', sessionViews.toString());
-        setViewCount(sessionViews);
       }
     };
-    
     fetchViewCount();
   }, []);
 
-  const handleOpenFeedManager = () => {
-    console.log('Opening feed manager...');
-    setShowFeedManager(true);
-  };
+  const handleOpenFeedManager = () => setShowFeedManager(true);
 
   const addFeed = () => {
     const url = prompt('Enter RSS feed URL:');
     if (!url || !url.trim()) return;
-    
     const source = prompt('Enter source name (e.g., "TechCrunch"):');
     if (!source || !source.trim()) return;
-    
     const category = prompt('Enter category (e.g., "Tech News"):');
     const logo = prompt('Enter emoji logo (e.g., 📰):') || '📰';
-    
-    const newFeed = {
-      url: url.trim(),
-      source: source.trim(),
-      category: category?.trim() || 'General',
-      logo: logo,
-      priority: 1,
-      requireBoth: false,
-      enabled: true
-    };
-    
+    const newFeed = { url: url.trim(), source: source.trim(), category: category?.trim() || 'General', logo: logo, priority: 1, requireBoth: false, enabled: true };
     const updatedFeeds = [...(customFeeds.length > 0 ? customFeeds : DEFAULT_RSS_FEEDS), newFeed];
     setCustomFeeds(updatedFeeds);
     localStorage.setItem('customFeeds', JSON.stringify(updatedFeeds));
-    
-    if (confirm('✅ Feed added! Refresh now to load articles from this feed?')) {
-      window.location.reload();
-    }
+    if (confirm('✅ Feed added! Refresh now to load articles from this feed?')) window.location.reload();
   };
 
   const toggleFeed = (index) => {
@@ -125,10 +94,7 @@ const App = () => {
     feedsToUpdate[index].enabled = !feedsToUpdate[index].enabled;
     setCustomFeeds(feedsToUpdate);
     localStorage.setItem('customFeeds', JSON.stringify(feedsToUpdate));
-    
-    if (confirm(`Feed ${feedsToUpdate[index].enabled ? 'enabled' : 'disabled'}! Refresh now to see changes?`)) {
-      window.location.reload();
-    }
+    if (confirm(`Feed ${feedsToUpdate[index].enabled ? 'enabled' : 'disabled'}! Refresh now to see changes?`)) window.location.reload();
   };
 
   const deleteFeed = (index) => {
@@ -137,10 +103,7 @@ const App = () => {
       feedsToUpdate.splice(index, 1);
       setCustomFeeds(feedsToUpdate);
       localStorage.setItem('customFeeds', JSON.stringify(feedsToUpdate));
-      
-      if (confirm('Feed deleted! Refresh now to see changes?')) {
-        window.location.reload();
-      }
+      if (confirm('Feed deleted! Refresh now to see changes?')) window.location.reload();
     }
   };
 
@@ -148,52 +111,25 @@ const App = () => {
     if (confirm('Reset to default feeds? This will remove all custom feeds.')) {
       setCustomFeeds([]);
       localStorage.removeItem('customFeeds');
-      
-      if (confirm('✅ Reset to defaults! Refresh now to reload articles?')) {
-        window.location.reload();
-      }
+      if (confirm('✅ Reset to defaults! Refresh now to reload articles?')) window.location.reload();
     }
   };
 
-  // ... rest of your code continues with syncToGist, loadFromGist, etc.
-  
   const syncToGist = async () => {
     if (!gistToken) return;
     try {
       setGistStatus('syncing');
-      const data = {
-        exportDate: new Date().toISOString(),
-        version: '1.0',
-        articles: articles,
-        savedArticles: savedArticles,
-        archivedArticles: articles.filter(a => a.archived),
-        deletedArticles: JSON.parse(localStorage.getItem('deletedArticles') || '[]')
-      };
-      const gistData = {
-        description: 'AI Architecture Articles Backup',
-        public: false,
-        files: { 'ai-architecture-articles.json': { content: JSON.stringify(data, null, 2) } }
-      };
+      const data = { exportDate: new Date().toISOString(), version: '1.0', articles: articles, savedArticles: savedArticles, archivedArticles: articles.filter(a => a.archived), deletedArticles: JSON.parse(localStorage.getItem('deletedArticles') || '[]') };
+      const gistData = { description: 'AI Architecture Articles Backup', public: false, files: { 'ai-architecture-articles.json': { content: JSON.stringify(data, null, 2) } } };
       let response;
       if (gistId) {
-        response = await fetch(`https://api.github.com/gists/${gistId}`, {
-          method: 'PATCH',
-          headers: { 'Authorization': `token ${gistToken}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify(gistData)
-        });
+        response = await fetch(`https://api.github.com/gists/${gistId}`, { method: 'PATCH', headers: { 'Authorization': `token ${gistToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(gistData) });
       } else {
-        response = await fetch('https://api.github.com/gists', {
-          method: 'POST',
-          headers: { 'Authorization': `token ${gistToken}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify(gistData)
-        });
+        response = await fetch('https://api.github.com/gists', { method: 'POST', headers: { 'Authorization': `token ${gistToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(gistData) });
       }
       if (!response.ok) throw new Error('Failed to sync to GitHub');
       const result = await response.json();
-      if (!gistId) {
-        setGistId(result.id);
-        localStorage.setItem('githubGistId', result.id);
-      }
+      if (!gistId) { setGistId(result.id); localStorage.setItem('githubGistId', result.id); }
       setGistStatus('connected');
       setGistError('');
     } catch (err) {
@@ -214,18 +150,13 @@ const App = () => {
     if (!gistToken || !gistId) return;
     try {
       setGistStatus('syncing');
-      const response = await fetch(`https://api.github.com/gists/${gistId}`, {
-        headers: { 'Authorization': `token ${gistToken}` }
-      });
+      const response = await fetch(`https://api.github.com/gists/${gistId}`, { headers: { 'Authorization': `token ${gistToken}` } });
       if (!response.ok) throw new Error('Failed to load from GitHub');
       const gist = await response.json();
       const fileContent = gist.files['ai-architecture-articles.json']?.content;
       if (!fileContent) throw new Error('No data found in Gist');
       const data = JSON.parse(fileContent);
-      if (data.savedArticles) {
-        setSavedArticles(data.savedArticles);
-        localStorage.setItem('savedArticles', JSON.stringify(data.savedArticles));
-      }
+      if (data.savedArticles) { setSavedArticles(data.savedArticles); localStorage.setItem('savedArticles', JSON.stringify(data.savedArticles)); }
       if (data.archivedArticles) localStorage.setItem('archivedArticles', JSON.stringify(data.archivedArticles));
       if (data.deletedArticles) localStorage.setItem('deletedArticles', JSON.stringify(data.deletedArticles));
       const manualArticles = (data.articles || []).filter(a => a.manual);
@@ -295,56 +226,30 @@ const App = () => {
     const foundKeywords = [];
     const lowerText = text.toLowerCase();
     const keywordGroups = {
-      'midjourney': ['midjourney'], 'stable diffusion': ['stable diffusion', 'diffusion model'], 'enscape': ['enscape'],
-      'lumion': ['lumion'], 'twinmotion': ['twinmotion'], 'd5 render': ['d5.*render'], 'v-ray': ['vray', 'v-ray'],
-      'unreal engine': ['unreal.*engine', 'unreal'],
-      'ai rendering': ['ai.*render', 'render.*ai', 'neural.*render', 'lookx', 'veras', 'ai.*visualization', 'rendering.*ai', 'ai.*photorealistic'],
-      'chatgpt': ['chatgpt', 'gpt-4', 'gpt'], 'generative design': ['generative', 'parametric'],
-      'visualization': ['visualization', 'visuali[sz]e', '3d.*visual', 'photorealistic', 'archviz'],
-      'bim': ['bim', 'revit', 'building information'], 'machine learning': ['machine learning', 'ml', 'neural'],
-      'design process': ['design process', 'workflow', 'practice'], 'computational': ['algorithm', 'computational', 'optimization'],
-      'digital twin': ['digital twin', 'simulation'], 'vr/ar': ['virtual reality', 'augmented reality', 'vr', 'ar'],
-      '3d modeling': ['3d.*model', 'cad', 'sketchup', 'rhino', 'blender'], 'grasshopper': ['grasshopper'],
-      'sustainability': ['sustainable', 'energy', 'climate']
+      'midjourney': ['midjourney'], 'stable diffusion': ['stable diffusion'], 'enscape': ['enscape'], 'lumion': ['lumion'],
+      'ai rendering': ['ai.*render', 'render.*ai', 'lookx', 'veras'], 'chatgpt': ['chatgpt', 'gpt'],
+      'generative design': ['generative', 'parametric'], 'visualization': ['visualization', 'photorealistic'],
+      'bim': ['bim', 'revit'], 'machine learning': ['machine learning', 'neural']
     };
     for (const [label, keywords] of Object.entries(keywordGroups)) {
       if (keywords.some(kw => new RegExp(kw, 'i').test(lowerText))) foundKeywords.push(label);
     }
-    if (foundKeywords.length === 0) {
-      const words = lowerText.split(/\W+/).filter(word => word.length > 4);
-      foundKeywords.push(...words.slice(0, 3));
-    }
-    return foundKeywords.slice(0, 4);
+    return foundKeywords.slice(0, 3);
   };
 
   const exportData = (type = 'all') => {
-    const exportData = {
-      exportDate: new Date().toISOString(), version: '1.0', articles: articles, savedArticles: savedArticles,
-      archivedArticles: articles.filter(a => a.archived), activeArticles: articles.filter(a => !a.archived),
-      manualArticles: articles.filter(a => a.manual)
-    };
+    const exportData = { exportDate: new Date().toISOString(), version: '1.0', articles: articles, savedArticles: savedArticles, archivedArticles: articles.filter(a => a.archived) };
     let dataToExport, filename;
     switch(type) {
-      case 'archived':
-        dataToExport = { exportDate: exportData.exportDate, version: exportData.version, articles: exportData.archivedArticles };
-        filename = `ai-arch-archived-${new Date().toISOString().split('T')[0]}.json`;
-        break;
-      case 'saved':
-        dataToExport = { exportDate: exportData.exportDate, version: exportData.version, articles: articles.filter(a => savedArticles.includes(a.id)), savedArticles: savedArticles };
-        filename = `ai-arch-saved-${new Date().toISOString().split('T')[0]}.json`;
-        break;
-      default:
-        dataToExport = exportData;
-        filename = `ai-arch-backup-${new Date().toISOString().split('T')[0]}.json`;
+      case 'archived': dataToExport = { ...exportData, articles: exportData.archivedArticles }; filename = `ai-arch-archived-${new Date().toISOString().split('T')[0]}.json`; break;
+      case 'saved': dataToExport = { ...exportData, articles: articles.filter(a => savedArticles.includes(a.id)) }; filename = `ai-arch-saved-${new Date().toISOString().split('T')[0]}.json`; break;
+      default: dataToExport = exportData; filename = `ai-arch-backup-${new Date().toISOString().split('T')[0]}.json`;
     }
     const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
     alert(`✅ Exported ${type === 'all' ? 'complete backup' : type + ' articles'} successfully!`);
     setShowExportMenu(false);
@@ -368,10 +273,6 @@ const App = () => {
           setSavedArticles(newSaved);
           localStorage.setItem('savedArticles', JSON.stringify(newSaved));
         }
-        const archivedArticles = [...newArticles.filter(a => a.archived)];
-        const manualArticles = [...newArticles.filter(a => a.manual)];
-        localStorage.setItem('archivedArticles', JSON.stringify(archivedArticles));
-        localStorage.setItem('manualArticles', JSON.stringify(manualArticles));
         alert(`✅ Successfully imported ${newArticles.length} new articles!`);
       } catch (error) {
         alert('❌ Error importing file: ' + error.message);
@@ -387,12 +288,7 @@ const App = () => {
     const title = prompt('Enter article title:');
     if (!title || !title.trim()) return;
     const summary = prompt('Enter a brief summary (optional):') || 'No description provided';
-    const newArticle = {
-      id: url, title: title, source: 'Manual Addition', sourceLogo: '📌',
-      category: categorizeArticle(title, summary, 'Manual Addition'), date: new Date(), readTime: 5,
-      summary: summary, url: url, trending: false, keywords: extractKeywords(title + ' ' + summary),
-      priority: 1, archived: false, manual: true
-    };
+    const newArticle = { id: url, title: title, source: 'Manual Addition', sourceLogo: '📌', category: categorizeArticle(title, summary, 'Manual Addition'), date: new Date(), readTime: 5, summary: summary, url: url, trending: false, keywords: extractKeywords(title + ' ' + summary), priority: 1, archived: false, manual: true };
     setArticles(prev => [newArticle, ...prev]);
     const manualArticles = JSON.parse(localStorage.getItem('manualArticles') || '[]');
     manualArticles.push(newArticle);
@@ -402,23 +298,14 @@ const App = () => {
 
   const archiveArticle = (articleId) => {
     setArticles(prev => prev.map(article => article.id === articleId ? { ...article, archived: true } : article));
-    const archivedArticles = JSON.parse(localStorage.getItem('archivedArticles') || '[]');
-    const articleToArchive = articles.find(a => a.id === articleId);
-    if (articleToArchive && !archivedArticles.find(a => a.id === articleId)) {
-      archivedArticles.push({ ...articleToArchive, archived: true });
-      localStorage.setItem('archivedArticles', JSON.stringify(archivedArticles));
-    }
   };
 
   const restoreArticle = (articleId) => {
     setArticles(prev => prev.map(article => article.id === articleId ? { ...article, archived: false } : article));
-    const archivedArticles = JSON.parse(localStorage.getItem('archivedArticles') || '[]');
-    const updatedArchived = archivedArticles.filter(a => a.id !== articleId);
-    localStorage.setItem('archivedArticles', JSON.stringify(updatedArchived));
   };
 
   const deleteArticle = (articleId) => {
-    if (!confirm('Are you sure you want to permanently delete this article? This cannot be undone.')) return;
+    if (!confirm('Are you sure you want to permanently delete this article?')) return;
     setArticles(prev => prev.filter(article => article.id !== articleId));
     if (savedArticles.includes(articleId)) {
       const newSaved = savedArticles.filter(id => id !== articleId);
@@ -430,12 +317,6 @@ const App = () => {
       deletedArticles.push(articleId);
       localStorage.setItem('deletedArticles', JSON.stringify(deletedArticles));
     }
-    const archivedArticles = JSON.parse(localStorage.getItem('archivedArticles') || '[]');
-    const updatedArchived = archivedArticles.filter(a => a.id !== articleId);
-    localStorage.setItem('archivedArticles', JSON.stringify(updatedArchived));
-    const manualArticles = JSON.parse(localStorage.getItem('manualArticles') || '[]');
-    const updatedManual = manualArticles.filter(a => a.id !== articleId);
-    localStorage.setItem('manualArticles', JSON.stringify(updatedManual));
   };
 
   useEffect(() => {
@@ -443,65 +324,41 @@ const App = () => {
       setLoading(true);
       setError(null);
       try {
-        // Load custom feeds FIRST before fetching
         const savedFeeds = localStorage.getItem('customFeeds');
         let feedsToFetch = DEFAULT_RSS_FEEDS;
         if (savedFeeds) {
           try {
             const parsedFeeds = JSON.parse(savedFeeds);
             feedsToFetch = parsedFeeds.filter(f => f.enabled);
-            setCustomFeeds(parsedFeeds); // Update state too
-          } catch (e) {
-            console.error('Error loading custom feeds:', e);
-          }
+            setCustomFeeds(parsedFeeds);
+          } catch (e) {}
         }
-        
         const cachedArticles = JSON.parse(localStorage.getItem('cachedArticles') || '[]');
         const deletedArticles = JSON.parse(localStorage.getItem('deletedArticles') || '[]');
         if (cachedArticles.length > 0) {
-          const validCached = cachedArticles.filter(a => !deletedArticles.includes(a.id));
-          setArticles(validCached);
+          setArticles(cachedArticles.filter(a => !deletedArticles.includes(a.id)));
           setLoading(false);
         }
-        const archivedArticles = JSON.parse(localStorage.getItem('archivedArticles') || '[]');
-        const manualArticles = JSON.parse(localStorage.getItem('manualArticles') || '[]');
         const allArticles = [];
         const newFeedStatus = {};
         for (const feed of feedsToFetch) {
           try {
             const response = await fetch('https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(feed.url) + '&api_key=q1ihf2w1uk1uwljssn3dngzhms9ajhqjpzfpqgf4&count=50');
-            if (!response.ok) {
-              console.warn('Failed to fetch ' + feed.source);
-              newFeedStatus[feed.source] = { status: 'failed', count: 0, error: 'HTTP ' + response.status };
-              continue;
-            }
+            if (!response.ok) { newFeedStatus[feed.source] = { status: 'failed', count: 0, error: 'HTTP ' + response.status }; continue; }
             const data = await response.json();
             if (data.status === 'ok' && data.items) {
               const processedArticles = data.items.filter(item => {
-                const title = item.title || '';
-                const description = item.description || '';
-                const text = (title + ' ' + description).toLowerCase();
-                const hasAIKeyword = /\b(ai|artificial intelligence|machine learning|neural|generative|parametric|computational|midjourney|dall-e|stable diffusion|chatgpt|gpt|render.*ai|ai.*render|lookx|veras|enscape|lumion|twinmotion|unreal|unity|d5.*render|corona|vray|octane|ai.*visualization|neural.*render|algorithm|automat|digital.*design|smart.*design|procedural)\b/i.test(text);
-                const hasArchKeyword = /\b(architect|design|building|construction|render|rendering|visualization|visuali[sz]e|bim|3d.*model|cad|revit|sketchup|rhino|photorealistic|interior|facade|urban|planning|space|structure|blueprint|floor.*plan|concept.*design|spatial)\b/i.test(text);
-                const hasRenderingKeyword = /\b(midjourney|dall-e|stable diffusion|lookx|veras|enscape|lumion|twinmotion|d5.*render|corona|vray|octane|render|rendering|visualization|visuali[sz]e|photorealistic|3d.*visual|archviz)\b/i.test(text);
-                const isPureTech = /\b(smartphone|mobile.*app|web.*development|cryptocurrency|stock.*market|finance.*tech|healthcare.*software|medical.*device|pharmaceutical|video.*game|gaming)\b/i.test(text) && !hasArchKeyword && !hasRenderingKeyword;
-                if (hasRenderingKeyword && !isPureTech) return true;
-                if (feed.requireBoth) return hasAIKeyword && hasArchKeyword && !isPureTech;
-                return (hasAIKeyword || hasArchKeyword) && !isPureTech;
-              }).map((item) => {
-                const title = item.title || 'Untitled';
-                const description = item.description || '';
-                const cleanDescription = description.replace(/<[^>]*>/g, '').substring(0, 200);
-                const stableId = item.link || item.guid || (feed.source + '-' + title.replace(/\W/g, '').substring(0, 30));
+                const text = ((item.title || '') + ' ' + (item.description || '')).toLowerCase();
+                const hasAI = /\b(ai|artificial intelligence|machine learning|neural|generative|parametric|computational|midjourney|dall-e|stable diffusion|chatgpt|render.*ai|ai.*render|lookx|veras|enscape|lumion|algorithm)\b/i.test(text);
+                const hasArch = /\b(architect|design|building|construction|render|rendering|visualization|bim|3d.*model|cad|revit|photorealistic)\b/i.test(text);
+                const hasRendering = /\b(midjourney|dall-e|stable diffusion|lookx|veras|enscape|lumion|render|rendering|visualization|photorealistic)\b/i.test(text);
+                if (hasRendering) return true;
+                if (feed.requireBoth) return hasAI && hasArch;
+                return hasAI || hasArch;
+              }).map(item => {
+                const stableId = item.link || item.guid || (feed.source + '-' + (item.title || '').replace(/\W/g, '').substring(0, 30));
                 if (deletedArticles.includes(stableId)) return null;
-                return {
-                  id: stableId, title: title, source: feed.source, sourceLogo: feed.logo,
-                  category: categorizeArticle(title, description, feed.category), originalCategory: feed.category,
-                  date: new Date(item.pubDate || Date.now()), readTime: Math.floor(cleanDescription.length / 200) + 5,
-                  summary: cleanDescription + '...', url: item.link || item.guid || '#', trending: Math.random() > 0.75,
-                  keywords: extractKeywords(title + ' ' + description), image: item.enclosure?.link || item.thumbnail,
-                  priority: feed.priority, archived: false, manual: false
-                };
+                return { id: stableId, title: item.title || 'Untitled', source: feed.source, sourceLogo: feed.logo, category: categorizeArticle(item.title || '', item.description || '', feed.category), date: new Date(item.pubDate || Date.now()), readTime: 5, summary: (item.description || '').replace(/<[^>]*>/g, '').substring(0, 200) + '...', url: item.link || '#', trending: Math.random() > 0.75, keywords: extractKeywords((item.title || '') + ' ' + (item.description || '')), priority: feed.priority, archived: false, manual: false };
               }).filter(item => item !== null);
               allArticles.push(...processedArticles);
               newFeedStatus[feed.source] = { status: 'success', count: processedArticles.length, totalFetched: data.items.length };
@@ -509,87 +366,39 @@ const App = () => {
               newFeedStatus[feed.source] = { status: 'failed', count: 0, error: data.message || 'Invalid response' };
             }
           } catch (feedError) {
-            console.error('Error fetching ' + feed.source + ':', feedError);
             newFeedStatus[feed.source] = { status: 'error', count: 0, error: feedError.message };
           }
         }
         setFeedStatus(newFeedStatus);
-        allArticles.push(...manualArticles.filter(a => !deletedArticles.includes(a.id)));
-        const combinedArticles = [...allArticles];
-        const newArticleIds = new Set(allArticles.map(a => a.id));
-        archivedArticles.forEach(archived => {
-          if (!newArticleIds.has(archived.id) && !deletedArticles.includes(archived.id)) {
-            combinedArticles.push({ ...archived, archived: true });
-          }
-        });
-        combinedArticles.sort((a, b) => {
-          if (a.archived !== b.archived) return a.archived ? 1 : -1;
-          if (a.priority !== b.priority) return a.priority - b.priority;
-          return b.date - a.date;
-        });
-        setArticles(combinedArticles);
-        localStorage.setItem('cachedArticles', JSON.stringify(combinedArticles));
-        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-        const articlesToArchive = combinedArticles.filter(a => new Date(a.date) > sevenDaysAgo).slice(0, 200);
-        localStorage.setItem('archivedArticles', JSON.stringify(articlesToArchive));
-        if (combinedArticles.length === 0) setError('No AI architecture articles found. Please try again later.');
+        allArticles.sort((a, b) => b.date - a.date);
+        setArticles(allArticles);
+        localStorage.setItem('cachedArticles', JSON.stringify(allArticles));
       } catch (err) {
-        setError('Failed to load articles. Please try again later.');
+        setError('Failed to load articles.');
         console.error('Error fetching articles:', err);
       } finally {
         setLoading(false);
       }
     };
     fetchArticles();
-    const interval = setInterval(fetchArticles, 30 * 60 * 1000);
-    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
     const saved = localStorage.getItem('savedArticles');
     if (saved) {
-      try {
-        setSavedArticles(JSON.parse(saved));
-      } catch (e) {
-        console.error('Error loading saved articles:', e);
-      }
+      try { setSavedArticles(JSON.parse(saved)); } catch (e) {}
     }
   }, []);
-
-  const categories = ['all', ...new Set(articles.map(a => a.category).filter(Boolean))].sort();
-  const getActiveCategoriesForTab = () => {
-    let relevantArticles = [];
-    if (activeTab === 'saved') {
-      relevantArticles = articles.filter(a => savedArticles.includes(a.id));
-    } else if (activeTab === 'archive') {
-      relevantArticles = articles.filter(a => a.archived);
-    } else {
-      relevantArticles = articles.filter(a => !a.archived);
-    }
-    const cats = new Set(relevantArticles.map(a => a.category).filter(Boolean));
-    return ['all', ...Array.from(cats)].sort();
-  };
-  const activeCategories = getActiveCategoriesForTab();
-  const allSources = [...new Set(articles.map(a => a.source))].filter(Boolean);
-  const manualSource = allSources.find(s => s === 'Manual Addition');
-  const otherSources = allSources.filter(s => s !== 'Manual Addition').sort();
-  const sources = ['all', ...(manualSource ? [manualSource, '---'] : []), ...otherSources];
 
   const getCategoryData = () => {
     const categoryCount = {};
     articles.filter(a => !a.archived).forEach(article => {
       if (article.category) categoryCount[article.category] = (categoryCount[article.category] || 0) + 1;
     });
-    return Object.entries(categoryCount).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
+    return Object.entries(categoryCount).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 8);
   };
 
   const chartData = getCategoryData();
-  const archivedArticles = articles.filter(a => a.archived);
-  const archiveCategoryCount = {};
-  archivedArticles.forEach(article => {
-    if (article.category) archiveCategoryCount[article.category] = (archiveCategoryCount[article.category] || 0) + 1;
-  });
-  const archiveChartData = Object.entries(archiveCategoryCount).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
   const colors = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#6366f1', '#f43f5e'];
 
   const getRelativeTime = (date) => {
@@ -615,19 +424,17 @@ const App = () => {
     const matchesCategory = selectedCategory === 'all' || article.category === selectedCategory;
     const matchesSource = selectedSource === 'all' || article.source === selectedSource;
     return matchesSearch && matchesCategory && matchesSource;
-  }).sort((a, b) => {
-    if (activeTab === 'archive') return b.date - a.date;
-    return sortBy === 'date' ? b.date - a.date : b.trending - a.trending;
-  });
+  }).sort((a, b) => sortBy === 'date' ? b.date - a.date : b.trending - a.trending);
 
   const trendingCount = articles.filter(a => a.trending && !a.archived).length;
+  const featuredArticle = filteredArticles[0];
 
   if (loading) {
     return (
-      <div className={'min-h-screen flex items-center justify-center ' + (darkMode ? 'bg-gray-900' : 'bg-gray-50')}>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800">
         <div className="text-center">
-          <RefreshCw className={'w-12 h-12 animate-spin mx-auto mb-4 ' + (darkMode ? 'text-blue-400' : 'text-blue-600')} />
-          <p className={'text-lg ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>Searching for AI in Architecture articles...</p>
+          <RefreshCw className="w-12 h-12 animate-spin mx-auto mb-4 text-blue-400" />
+          <p className="text-lg text-gray-300">Discovering AI in Architecture...</p>
         </div>
       </div>
     );
@@ -635,10 +442,10 @@ const App = () => {
 
   if (error && articles.length === 0) {
     return (
-      <div className={'min-h-screen flex items-center justify-center ' + (darkMode ? 'bg-gray-900' : 'bg-gray-50')}>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800">
         <div className="text-center max-w-md">
-          <AlertCircle className={'w-12 h-12 mx-auto mb-4 ' + (darkMode ? 'text-red-400' : 'text-red-600')} />
-          <p className={'text-lg mb-4 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>{error}</p>
+          <AlertCircle className="w-12 h-12 mx-auto mb-4 text-red-400" />
+          <p className="text-lg mb-4 text-gray-300">{error}</p>
           <button onClick={() => window.location.reload()} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">Retry</button>
         </div>
       </div>
@@ -646,83 +453,81 @@ const App = () => {
   }
 
   return (
-    <div className={'min-h-screen transition-colors duration-300 ' + (darkMode ? 'bg-gray-900' : 'bg-gray-50')}>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 text-white">
       <input type="file" ref={fileInputRef} onChange={importData} accept=".json" style={{ display: 'none' }} />
+
+      {/* Floating Toolbar */}
+      <div className="fixed top-6 right-6 flex gap-3 z-50" style={{ animation: 'fadeInDown 1s ease-out' }}>
+        <button onClick={() => setShowGistSettings(true)} className={'w-12 h-12 rounded-xl backdrop-blur-xl border border-white/10 flex items-center justify-center transition-all hover:border-blue-500/50 hover:-translate-y-1 ' + (gistStatus === 'connected' ? 'bg-slate-800/80 text-green-400' : 'bg-slate-800/80 text-gray-400')} title={gistStatus === 'connected' ? 'Cloud sync enabled' : 'Setup cloud sync'}>
+          {gistStatus === 'connected' ? <Cloud className="w-5 h-5" /> : <CloudOff className="w-5 h-5" />}
+        </button>
+        <div className="relative">
+          <button onClick={() => setShowExportMenu(!showExportMenu)} className="w-12 h-12 rounded-xl bg-slate-800/80 backdrop-blur-xl border border-white/10 flex items-center justify-center text-purple-400 transition-all hover:border-purple-500/50 hover:-translate-y-1" title="Export/Import">
+            <Database className="w-5 h-5" />
+          </button>
+          {showExportMenu && (
+            <div className="absolute right-0 mt-2 w-64 rounded-xl bg-slate-800 backdrop-blur-xl border border-white/10 p-2 shadow-2xl">
+              <div className="text-xs font-semibold mb-2 px-2 text-gray-400">EXPORT</div>
+              <button onClick={() => exportData('all')} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/5 text-left text-gray-300 text-sm"><Download className="w-4 h-4" />Complete Backup</button>
+              <button onClick={() => exportData('archived')} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/5 text-left text-gray-300 text-sm"><Download className="w-4 h-4" />Archived Only</button>
+              <button onClick={() => exportData('saved')} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/5 text-left text-gray-300 text-sm"><Download className="w-4 h-4" />Saved Only</button>
+              <div className="text-xs font-semibold my-2 px-2 pt-2 border-t border-white/10 text-gray-400">IMPORT</div>
+              <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/5 text-left text-gray-300 text-sm"><Upload className="w-4 h-4" />Import from File</button>
+            </div>
+          )}
+        </div>
+        <button onClick={() => window.location.reload()} className="w-12 h-12 rounded-xl bg-slate-800/80 backdrop-blur-xl border border-white/10 flex items-center justify-center text-green-400 transition-all hover:border-green-500/50 hover:-translate-y-1" title="Refresh">
+          <RefreshCw className="w-5 h-5" />
+        </button>
+        <button onClick={() => setShowChart(!showChart)} className="w-12 h-12 rounded-xl bg-slate-800/80 backdrop-blur-xl border border-white/10 flex items-center justify-center text-blue-400 transition-all hover:border-blue-500/50 hover:-translate-y-1" title="Toggle Chart">
+          <BarChart3 className="w-5 h-5" />
+        </button>
+        <button onClick={() => setShowFeedStatus(!showFeedStatus)} className="w-12 h-12 rounded-xl bg-slate-800/80 backdrop-blur-xl border border-white/10 flex items-center justify-center text-cyan-400 transition-all hover:border-cyan-500/50 hover:-translate-y-1" title="Feed Status">
+          <Settings className="w-5 h-5" />
+        </button>
+        <button onClick={handleOpenFeedManager} className="w-12 h-12 rounded-xl bg-slate-800/80 backdrop-blur-xl border border-white/10 flex items-center justify-center text-purple-400 transition-all hover:border-purple-500/50 hover:-translate-y-1" title="Manage Feeds">
+          <Filter className="w-5 h-5" />
+        </button>
+        <button onClick={() => setDarkMode(!darkMode)} className="w-12 h-12 rounded-xl bg-slate-800/80 backdrop-blur-xl border border-white/10 flex items-center justify-center text-amber-400 transition-all hover:border-amber-500/50 hover:-translate-y-1" title="Toggle Theme">
+          {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+        </button>
+        <a href="mailto:architek.eth@gmail.com?subject=AI%20in%20Architecture%20-%20Feedback&body=Hi%2C%0A%0AI%20have%20a%20suggestion%3A%0A%0A" className="w-12 h-12 rounded-xl bg-slate-800/80 backdrop-blur-xl border border-white/10 flex items-center justify-center text-pink-400 transition-all hover:border-pink-500/50 hover:-translate-y-1" title="Send Feedback" style={{textDecoration: 'none'}}>
+          <Mail className="w-5 h-5" />
+        </a>
+      </div>
 
       {/* Feed Manager Modal */}
       {showFeedManager && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 overflow-y-auto"
-          style={{ zIndex: 9999 }}
-          onClick={() => setShowFeedManager(false)}
-        >
-          <div 
-            className={'max-w-4xl w-full rounded-xl p-6 my-8 max-h-[90vh] overflow-y-auto ' + (darkMode ? 'bg-gray-800' : 'bg-white')}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className={'flex items-center justify-between mb-4 pb-4 border-b ' + (darkMode ? 'border-gray-700' : 'border-gray-200')}>
-              <h2 className={'text-xl font-bold flex items-center gap-2 ' + (darkMode ? 'text-white' : 'text-gray-900')}>
-                <Filter className="w-6 h-6" />
-                RSS Feed Manager
-              </h2>
-              <button 
-                onClick={() => setShowFeedManager(false)} 
-                className={'p-2 rounded-lg transition ' + (darkMode ? 'hover:bg-gray-700 text-gray-300' : 'hover:bg-gray-100 text-gray-700')}
-              >
-                <X className="w-5 h-5" />
-              </button>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 overflow-y-auto z-[100]" onClick={() => setShowFeedManager(false)}>
+          <div className="max-w-4xl w-full rounded-2xl p-6 my-8 max-h-[90vh] overflow-y-auto bg-slate-800 border border-white/10" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 pb-4 border-b border-white/10">
+              <h2 className="text-xl font-bold flex items-center gap-2"><Filter className="w-6 h-6" />RSS Feed Manager</h2>
+              <button onClick={() => setShowFeedManager(false)} className="p-2 rounded-lg hover:bg-white/5"><X className="w-5 h-5" /></button>
             </div>
-
-            <div className={'mb-4 p-4 rounded-lg ' + (darkMode ? 'bg-blue-500/10 border border-blue-500/30' : 'bg-blue-50 border border-blue-200')}>
-              <p className={'text-sm ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>
-                Manage your RSS feeds. Enable/disable feeds or add custom ones. Changes take effect after refresh.
-              </p>
-            </div>
-
             <div className="mb-4 flex gap-2">
-              <button onClick={addFeed} className={'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ' + (darkMode ? 'bg-green-500 text-white hover:bg-green-600' : 'bg-green-600 text-white hover:bg-green-700')}>
-                + Add Custom Feed
-              </button>
-              <button onClick={resetFeeds} className={'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ' + (darkMode ? 'bg-orange-500/10 text-orange-400 hover:bg-orange-500/20' : 'bg-orange-50 text-orange-700 hover:bg-orange-100')}>
-                Reset to Defaults
-              </button>
+              <button onClick={addFeed} className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-green-500 text-white hover:bg-green-600">+ Add Custom Feed</button>
+              <button onClick={resetFeeds} className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-orange-500/10 text-orange-400 hover:bg-orange-500/20">Reset to Defaults</button>
             </div>
-
-            <div className={'space-y-2 ' + (darkMode ? 'text-white' : 'text-gray-900')}>
+            <div className="space-y-2">
               {(customFeeds.length > 0 ? customFeeds : DEFAULT_RSS_FEEDS).map((feed, index) => (
-                <div key={index} className={'p-4 rounded-lg border flex items-center justify-between ' + (darkMode ? 'bg-gray-750 border-gray-600' : 'bg-gray-50 border-gray-200')}>
+                <div key={index} className="p-4 rounded-lg border border-white/5 bg-slate-750 flex items-center justify-between">
                   <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <span className="text-2xl flex-shrink-0">{feed.logo}</span>
+                    <span className="text-2xl">{feed.logo}</span>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className={'font-semibold ' + (darkMode ? 'text-white' : 'text-gray-900')}>{feed.source}</h3>
-                        {!feed.enabled && (<span className={'px-2 py-0.5 rounded text-xs ' + (darkMode ? 'bg-gray-600 text-gray-400' : 'bg-gray-200 text-gray-600')}>Disabled</span>)}
-                        {feedStatus[feed.source]?.status === 'failed' && feed.enabled && (<span className={'px-2 py-0.5 rounded text-xs ' + (darkMode ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-700')}>Failed</span>)}
+                        <h3 className="font-semibold">{feed.source}</h3>
+                        {!feed.enabled && <span className="px-2 py-0.5 rounded text-xs bg-gray-600 text-gray-400">Disabled</span>}
+                        {feedStatus[feed.source]?.status === 'failed' && feed.enabled && <span className="px-2 py-0.5 rounded text-xs bg-red-500/20 text-red-400">Failed</span>}
                       </div>
-                      <p className={'text-xs ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>{feed.category}</p>
-                      <p className={'text-xs truncate ' + (darkMode ? 'text-gray-500' : 'text-gray-500')}>{feed.url}</p>
+                      <p className="text-xs text-gray-400">{feed.category}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <button
-                      onClick={() => toggleFeed(index)}
-                      className={'px-3 py-1.5 rounded-lg text-xs font-medium transition whitespace-nowrap ' + (feed.enabled 
-                        ? (darkMode ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30' : 'bg-green-100 text-green-700 hover:bg-green-200')
-                        : (darkMode ? 'bg-gray-600 text-gray-400 hover:bg-gray-500' : 'bg-gray-200 text-gray-600 hover:bg-gray-300')
-                      )}
-                    >
-                      {feed.enabled ? 'Enabled' : 'Disabled'}
-                    </button>
-                    <button onClick={() => deleteFeed(index)} className={'p-2 rounded-lg transition ' + (darkMode ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20' : 'bg-red-50 text-red-700 hover:bg-red-100')} title="Delete feed">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => toggleFeed(index)} className={'px-3 py-1.5 rounded-lg text-xs font-medium ' + (feed.enabled ? 'bg-green-500/20 text-green-400' : 'bg-gray-600 text-gray-400')}>{feed.enabled ? 'Enabled' : 'Disabled'}</button>
+                    <button onClick={() => deleteFeed(index)} className="p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20"><Trash2 className="w-4 h-4" /></button>
                   </div>
                 </div>
               ))}
-            </div>
-
-            <div className={'mt-4 p-3 rounded-lg text-sm ' + (darkMode ? 'bg-yellow-500/10 text-yellow-400' : 'bg-yellow-50 text-yellow-700')}>
-              💡 After adding or removing feeds, click the refresh button to load articles from updated sources.
             </div>
           </div>
         </div>
@@ -730,419 +535,185 @@ const App = () => {
 
       {/* Gist Settings Modal */}
       {showGistSettings && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className={'max-w-2xl w-full rounded-xl p-6 ' + (darkMode ? 'bg-gray-800' : 'bg-white')}>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="max-w-2xl w-full rounded-2xl p-6 bg-slate-800 border border-white/10">
             <div className="flex items-center justify-between mb-4">
-              <h2 className={'text-xl font-bold flex items-center gap-2 ' + (darkMode ? 'text-white' : 'text-gray-900')}>
-                <Cloud className="w-6 h-6" />
-                GitHub Gist Cloud Sync
-              </h2>
-              <button onClick={() => setShowGistSettings(false)} className={'p-2 rounded-lg hover:bg-opacity-10 ' + (darkMode ? 'hover:bg-white' : 'hover:bg-black')}>
-                <X className="w-5 h-5" />
-              </button>
+              <h2 className="text-xl font-bold flex items-center gap-2"><Cloud className="w-6 h-6" />GitHub Gist Cloud Sync</h2>
+              <button onClick={() => setShowGistSettings(false)} className="p-2 rounded-lg hover:bg-white/5"><X className="w-5 h-5" /></button>
             </div>
-
-            <div className={'mb-6 p-4 rounded-lg ' + (darkMode ? 'bg-blue-500/10 border border-blue-500/30' : 'bg-blue-50 border border-blue-200')}>
-              <h3 className={'font-semibold mb-2 ' + (darkMode ? 'text-blue-400' : 'text-blue-900')}>How to Setup (2 minutes):</h3>
-              <ol className={'text-sm space-y-1 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>
-                <li>1. Go to <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)</a></li>
-                <li>2. Click "Generate new token (classic)"</li>
-                <li>3. Give it a name like "AI Architecture Sync"</li>
-                <li>4. Check the <strong>"gist"</strong> scope only</li>
-                <li>5. Click "Generate token" and copy it</li>
-                <li>6. Paste it below and click Save</li>
-              </ol>
-            </div>
-
             <div className="mb-4">
-              <label className={'block text-sm font-medium mb-2 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>GitHub Personal Access Token</label>
-              <input type="password" value={gistToken} onChange={(e) => setGistToken(e.target.value)} placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" className={'w-full px-4 py-2 rounded-lg border font-mono text-sm ' + (darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300')} />
+              <label className="block text-sm font-medium mb-2 text-gray-300">GitHub Personal Access Token</label>
+              <input type="password" value={gistToken} onChange={(e) => setGistToken(e.target.value)} placeholder="ghp_xxxxxxxxxxxx" className="w-full px-4 py-2 rounded-lg border bg-slate-700 border-slate-600 text-white" />
             </div>
-
             <div className="mb-4">
-              <label className={'block text-sm font-medium mb-2 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>Gist ID (optional - leave blank for new Gist)</label>
-              <input type="text" value={gistId} onChange={(e) => setGistId(e.target.value)} placeholder="abc123def456... (find in your GitHub Gists)" className={'w-full px-4 py-2 rounded-lg border font-mono text-sm ' + (darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300')} />
-              <p className={'text-xs mt-1 ' + (darkMode ? 'text-gray-500' : 'text-gray-600')}>
-                To restore from existing backup: Go to <a href="https://gist.github.com" target="_blank" className="text-blue-500 hover:underline">gist.github.com</a>, find "AI Architecture Articles Backup", copy the ID from the URL
-              </p>
+              <label className="block text-sm font-medium mb-2 text-gray-300">Gist ID (optional)</label>
+              <input type="text" value={gistId} onChange={(e) => setGistId(e.target.value)} placeholder="abc123def456..." className="w-full px-4 py-2 rounded-lg border bg-slate-700 border-slate-600 text-white" />
             </div>
-
-            {gistError && (
-              <div className={'mb-4 p-3 rounded-lg text-sm ' + (darkMode ? 'bg-red-500/10 text-red-400' : 'bg-red-50 text-red-700')}>
-                {gistError}
-              </div>
-            )}
-
             <div className="flex gap-2">
-              <button onClick={saveGistSettings} disabled={!gistToken} className={'flex-1 px-4 py-2 rounded-lg font-medium transition ' + (darkMode ? 'bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50' : 'bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50')}>
-                <Check className="w-4 h-4 inline mr-2" />
-                Save & Enable Auto-Sync
-              </button>
-              {gistStatus === 'connected' && (
-                <button onClick={disconnectGist} className={'px-4 py-2 rounded-lg font-medium transition ' + (darkMode ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20' : 'bg-red-50 text-red-700 hover:bg-red-100')}>
-                  Disconnect
-                </button>
-              )}
+              <button onClick={saveGistSettings} disabled={!gistToken} className="flex-1 px-4 py-2 rounded-lg font-medium bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50"><Check className="w-4 h-4 inline mr-2" />Save & Enable Auto-Sync</button>
+              {gistStatus === 'connected' && <button onClick={disconnectGist} className="px-4 py-2 rounded-lg font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20">Disconnect</button>}
             </div>
           </div>
         </div>
       )}
 
-      <header className={'sticky top-0 z-50 backdrop-blur-xl border-b ' + (darkMode ? 'bg-gray-900/80 border-gray-800' : 'bg-white/80 border-gray-200')}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-3">
-              <div className={'p-2 rounded-xl ' + (darkMode ? 'bg-blue-500/10' : 'bg-blue-50')}>
-                <Building2 className={'w-6 h-6 ' + (darkMode ? 'text-blue-400' : 'text-blue-600')} />
-              </div>
-              <div>
-                <h1 className={'text-2xl font-bold ' + (darkMode ? 'text-white' : 'text-gray-900')}>AI in Architecture</h1>
-                <p className={'text-sm ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
-                  {articles.filter(a => !a.archived).length} articles · {trendingCount} trending · {savedArticles.length} saved
-                  {viewCount !== null && <> · 👁️ {viewCount.toLocaleString()} views</>}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button onClick={() => setShowGistSettings(true)} className={'p-2 rounded-lg transition relative ' + (darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200') + ' ' + (gistStatus === 'connected' ? 'text-green-400' : gistStatus === 'syncing' ? 'text-blue-400' : gistStatus === 'error' ? 'text-red-400' : 'text-gray-400')} title={gistStatus === 'connected' ? 'Cloud sync enabled' : 'Setup cloud sync'}>
-                {gistStatus === 'connected' ? <Cloud className="w-5 h-5" /> : <CloudOff className="w-5 h-5" />}
-                {gistStatus === 'syncing' && (<span className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full animate-pulse"></span>)}
-              </button>
-              <div className="relative">
-                <button onClick={() => setShowExportMenu(!showExportMenu)} className={'p-2 rounded-lg transition ' + (darkMode ? 'bg-gray-800 text-purple-400 hover:bg-gray-700' : 'bg-gray-100 text-purple-600 hover:bg-gray-200')} title="Export/Import data">
-                  <Database className="w-5 h-5" />
-                </button>
-                {showExportMenu && (
-                  <div className={'absolute right-0 mt-2 w-64 rounded-lg shadow-xl border p-2 z-50 ' + (darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
-                    <div className={'text-xs font-semibold mb-2 px-2 ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>EXPORT</div>
-                    <button onClick={() => exportData('all')} className={'w-full flex items-center gap-2 px-3 py-2 rounded hover:bg-opacity-10 text-left ' + (darkMode ? 'hover:bg-blue-500 text-gray-300' : 'hover:bg-blue-100 text-gray-700')}>
-                      <Download className="w-4 h-4" />
-                      <span className="text-sm">Complete Backup</span>
-                    </button>
-                    <button onClick={() => exportData('archived')} className={'w-full flex items-center gap-2 px-3 py-2 rounded hover:bg-opacity-10 text-left ' + (darkMode ? 'hover:bg-blue-500 text-gray-300' : 'hover:bg-blue-100 text-gray-700')}>
-                      <Download className="w-4 h-4" />
-                      <span className="text-sm">Archived Only</span>
-                    </button>
-                    <button onClick={() => exportData('saved')} className={'w-full flex items-center gap-2 px-3 py-2 rounded hover:bg-opacity-10 text-left ' + (darkMode ? 'hover:bg-blue-500 text-gray-300' : 'hover:bg-blue-100 text-gray-700')}>
-                      <Download className="w-4 h-4" />
-                      <span className="text-sm">Saved Only</span>
-                    </button>
-                    <div className={'text-xs font-semibold my-2 px-2 pt-2 border-t ' + (darkMode ? 'text-gray-400 border-gray-700' : 'text-gray-600 border-gray-200')}>IMPORT</div>
-                    <button onClick={() => fileInputRef.current?.click()} className={'w-full flex items-center gap-2 px-3 py-2 rounded hover:bg-opacity-10 text-left ' + (darkMode ? 'hover:bg-green-500 text-gray-300' : 'hover:bg-green-100 text-gray-700')}>
-                      <Upload className="w-4 h-4" />
-                      <span className="text-sm">Import from File</span>
-                    </button>
-                    {gistId && (
-                      <button onClick={() => { loadFromGist(); setShowExportMenu(false); }} className={'w-full flex items-center gap-2 px-3 py-2 rounded hover:bg-opacity-10 text-left ' + (darkMode ? 'hover:bg-green-500 text-gray-300' : 'hover:bg-green-100 text-gray-700')}>
-                        <Cloud className="w-4 h-4" />
-                        <span className="text-sm">Load from GitHub</span>
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-              <button onClick={() => window.location.reload()} className={'p-2 rounded-lg transition ' + (darkMode ? 'bg-gray-800 text-green-400 hover:bg-gray-700' : 'bg-gray-100 text-green-600 hover:bg-gray-200')} title="Refresh articles">
-                <RefreshCw className="w-5 h-5" />
-              </button>
-              <button onClick={() => setShowChart(!showChart)} className={'p-2 rounded-lg ' + (darkMode ? 'bg-gray-800 text-blue-400 hover:bg-gray-700' : 'bg-gray-100 text-blue-600 hover:bg-gray-200')}>
-                <BarChart3 className="w-5 h-5" />
-              </button>
-              <button onClick={() => setShowFeedStatus(!showFeedStatus)} className={'p-2 rounded-lg transition ' + (darkMode ? 'bg-gray-800 text-cyan-400 hover:bg-gray-700' : 'bg-gray-100 text-cyan-600 hover:bg-gray-200')} title="View feed status">
-                <Settings className="w-5 h-5" />
-              </button>
-              <button onClick={handleOpenFeedManager} className={'p-2 rounded-lg transition ' + (darkMode ? 'bg-gray-800 text-purple-400 hover:bg-gray-700' : 'bg-gray-100 text-purple-600 hover:bg-gray-200')} title="Manage RSS feeds">
-                <Filter className="w-5 h-5" />
-              </button>
-              <button onClick={() => setDarkMode(!darkMode)} className={'p-2 rounded-lg ' + (darkMode ? 'bg-gray-800 text-yellow-400 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')}>
-                {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-              </button>
-            </div>
+      {/* Hero Section */}
+      <section className="min-h-[60vh] flex flex-col justify-center items-center text-center px-4 pt-24 pb-12 relative overflow-hidden" style={{ animation: 'fadeInUp 1s ease-out' }}>
+        <div className="absolute inset-0 bg-gradient-radial from-blue-500/15 via-transparent to-transparent" style={{ animation: 'pulse 8s ease-in-out infinite' }}></div>
+        <div className="relative z-10">
+          <h1 className="text-6xl md:text-7xl font-bold mb-4 bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent" style={{ letterSpacing: '-0.02em' }}>AI × Architecture</h1>
+          <p className="text-xl md:text-2xl text-slate-400 font-light mb-8" style={{ letterSpacing: '0.05em' }}>Where Innovation Meets Design</p>
+          <div className="flex flex-wrap gap-6 justify-center text-sm text-slate-500" style={{ animation: 'fadeInUp 1s ease-out 0.3s both' }}>
+            <span className="relative">{articles.filter(a => !a.archived).length} CURATED ARTICLES</span>
+            <span className="relative">{trendingCount} TRENDING NOW</span>
+            <span className="relative">{savedArticles.length} SAVED</span>
+            {viewCount && <span className="relative flex items-center gap-2">👁️ {viewCount.toLocaleString()} VIEWS</span>}
           </div>
-
-          <div className="flex gap-2 mb-4 overflow-x-auto">
-            <button onClick={() => setActiveTab('all')} className={'px-4 py-2 rounded-lg font-medium transition whitespace-nowrap ' + (activeTab === 'all' ? (darkMode ? 'bg-blue-500 text-white' : 'bg-blue-600 text-white') : (darkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white border text-gray-700 hover:bg-gray-50'))}>
-              Recent ({articles.filter(a => !a.archived).length})
-            </button>
-            <button onClick={() => setActiveTab('saved')} className={'px-4 py-2 rounded-lg font-medium transition flex items-center gap-2 whitespace-nowrap ' + (activeTab === 'saved' ? (darkMode ? 'bg-blue-500 text-white' : 'bg-blue-600 text-white') : (darkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white border text-gray-700 hover:bg-gray-50'))}>
-              <Heart className="w-4 h-4" fill={activeTab === 'saved' ? 'currentColor' : 'none'} />
-              Saved ({savedArticles.length})
-            </button>
-            <button onClick={() => setActiveTab('archive')} className={'px-4 py-2 rounded-lg font-medium transition flex items-center gap-2 whitespace-nowrap ' + (activeTab === 'archive' ? (darkMode ? 'bg-blue-500 text-white' : 'bg-blue-600 text-white') : (darkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white border text-gray-700 hover:bg-gray-50'))}>
-              <Archive className="w-4 h-4" />
-              Archive ({articles.filter(a => a.archived).length})
-            </button>
-          </div>
-
-          <div className="relative">
-            <Search className={'absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 ' + (darkMode ? 'text-gray-500' : 'text-gray-400')} />
-            <input type="text" placeholder="Filter current articles..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className={'w-full pl-10 pr-32 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500 ' + (darkMode ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900')} />
-            <button onClick={addArticleByURL} className={'absolute right-2 top-1/2 transform -translate-y-1/2 px-4 py-1.5 rounded-lg text-sm font-medium transition ' + (darkMode ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-blue-600 text-white hover:bg-blue-700')}>
-              + Add Article
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2 mt-4 overflow-x-auto pb-2">
-            <button onClick={() => setShowFilters(!showFilters)} className={'flex items-center gap-2 px-4 py-2 rounded-lg ' + (darkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white border text-gray-700 hover:bg-gray-50')}>
-              <Filter className="w-4 h-4" />Filters
-            </button>
-            {activeCategories.slice(0, 10).map(cat => (
-              <button key={cat} onClick={() => setSelectedCategory(cat)} className={'px-4 py-2 rounded-lg text-sm whitespace-nowrap ' + (selectedCategory === cat ? (darkMode ? 'bg-blue-500 text-white' : 'bg-blue-600 text-white') : (darkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-white border text-gray-700 hover:bg-gray-50'))}>
-                {cat === 'all' ? 'All Topics' : cat}
-              </button>
-            ))}
-            {activeCategories.length > 10 && (
-              <span className={'px-3 py-2 text-xs ' + (darkMode ? 'text-gray-500' : 'text-gray-400')}>
-                +{activeCategories.length - 10} more in filters
-              </span>
-            )}
-          </div>
-
-          {showFilters && (
-            <div className={'mt-4 p-4 rounded-xl ' + (darkMode ? 'bg-gray-800' : 'bg-white border')}>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className={'font-semibold ' + (darkMode ? 'text-white' : 'text-gray-900')}>Filter Options</h3>
-                <button onClick={() => setShowFeedManager(true)} className={'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition ' + (darkMode ? 'bg-purple-500/10 text-purple-400 hover:bg-purple-500/20' : 'bg-purple-50 text-purple-700 hover:bg-purple-100')}>
-                  <Settings className="w-4 h-4" />
-                  Manage RSS Feeds
-                </button>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className={'block text-sm font-medium mb-2 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>Category</label>
-                  <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className={'w-full px-3 py-2 rounded-lg border ' + (darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300')}>
-                    {categories.map(cat => <option key={cat} value={cat}>{cat === 'all' ? 'All Categories' : cat}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className={'block text-sm font-medium mb-2 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>Source</label>
-                  <select value={selectedSource} onChange={(e) => setSelectedSource(e.target.value)} className={'w-full px-3 py-2 rounded-lg border ' + (darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300')}>
-                    {sources.map(s => {
-                      if (s === '---') return <option key="separator" disabled>────────────</option>;
-                      return <option key={s} value={s}>{s === 'all' ? 'All Sources' : s}</option>;
-                    })}
-                  </select>
-                </div>
-                <div>
-                  <label className={'block text-sm font-medium mb-2 ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>Sort By</label>
-                  <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className={'w-full px-3 py-2 rounded-lg border ' + (darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300')}>
-                    <option value="date">Latest First</option>
-                    <option value="trending">Trending</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
-      </header>
+      </section>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {showFeedStatus && (
-          <div className={'mb-8 p-6 rounded-xl border ' + (darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
+      {/* Featured Article */}
+      {featuredArticle && (
+        <section className="max-w-6xl mx-auto px-4 py-8" style={{ animation: 'fadeInUp 1s ease-out 0.6s both' }}>
+          <div className="text-center text-slate-500 text-xs tracking-widest uppercase mb-6">Featured Today</div>
+          <div className="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-3xl p-8 hover:-translate-y-2 transition-all duration-500 cursor-pointer relative group overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div className="flex items-center gap-4 mb-4 text-sm text-slate-500">
+              <span className="text-3xl">{featuredArticle.sourceLogo}</span>
+              <span>{featuredArticle.source}</span>
+              <span>•</span>
+              <span>{featuredArticle.readTime} min read</span>
+              <span>•</span>
+              <span>{getRelativeTime(featuredArticle.date)}</span>
+            </div>
+            <h2 className="text-3xl md:text-4xl font-bold mb-4 leading-tight">{featuredArticle.title}</h2>
+            <p className="text-lg text-slate-400 leading-relaxed mb-6">{featuredArticle.summary}</p>
+            <div className="flex gap-2 flex-wrap">
+              {featuredArticle.keywords.map((kw, i) => <span key={i} className="px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full text-sm text-blue-400">{kw}</span>)}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Chart Section */}
+      {showChart && chartData.length > 0 && (
+        <section className="max-w-6xl mx-auto px-4 py-8" style={{ animation: 'fadeInUp 1s ease-out 0.9s both' }}>
+          <div className="bg-slate-800/30 backdrop-blur-xl border border-white/5 rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-semibold">Articles by Category</h2>
+            </div>
+            <div className="space-y-3">
+              {chartData.map((item, idx) => (
+                <div key={idx} className="flex items-center gap-4">
+                  <div className="w-48 text-sm text-slate-400 text-right">{item.name}</div>
+                  <div className="flex-1 h-4 bg-slate-900/50 rounded-lg overflow-hidden relative">
+                    <div className="h-full rounded-lg flex items-center px-3 text-xs font-semibold text-white transition-all duration-1000" style={{ width: `${(item.count / chartData[0].count) * 100}%`, background: `linear-gradient(90deg, ${colors[idx % colors.length]}, ${colors[(idx + 1) % colors.length]})`, animation: 'growBar 1.5s ease-out forwards', animationDelay: `${idx * 0.1}s` }}></div>
+                  </div>
+                  <div className="w-12 text-right text-sm font-semibold">{item.count}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Feed Status */}
+      {showFeedStatus && (
+        <section className="max-w-6xl mx-auto px-4 py-8">
+          <div className="bg-slate-800/30 backdrop-blur-xl border border-white/5 rounded-2xl p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className={'text-lg font-bold flex items-center gap-2 ' + (darkMode ? 'text-white' : 'text-gray-900')}>
-                <Settings className="w-5 h-5" />
-                RSS Feed Status
-              </h2>
-              <button onClick={() => setShowFeedStatus(false)} className={'text-sm ' + (darkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-600 hover:text-gray-700')}>Hide</button>
+              <h2 className="text-xl font-bold flex items-center gap-2"><Settings className="w-5 h-5" />RSS Feed Status</h2>
+              <button onClick={() => setShowFeedStatus(false)} className="text-sm text-slate-400 hover:text-slate-300">Hide</button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {RSS_FEEDS.map((feed) => {
-                const info = feedStatus[feed.source] || { status: 'pending', count: 0, error: 'Not yet fetched' };
+                const info = feedStatus[feed.source] || { status: 'pending', count: 0 };
                 return (
-                  <div key={feed.source} className={'p-3 rounded-lg border ' + (darkMode ? 'bg-gray-750 border-gray-600' : 'bg-gray-50 border-gray-200')}>
+                  <div key={feed.source} className="p-3 rounded-lg border border-white/5 bg-slate-750">
                     <div className="flex items-center justify-between mb-1">
-                      <span className={'font-medium text-sm ' + (darkMode ? 'text-white' : 'text-gray-900')}>{feed.source}</span>
-                      {info.status === 'success' ? (
-                        <span className={'px-2 py-0.5 rounded text-xs font-medium ' + (darkMode ? 'bg-green-500/20 text-green-400' : 'bg-green-100 text-green-700')}>✓ Active</span>
-                      ) : info.status === 'pending' ? (
-                        <span className={'px-2 py-0.5 rounded text-xs font-medium ' + (darkMode ? 'bg-yellow-500/20 text-yellow-400' : 'bg-yellow-100 text-yellow-700')}>⏳ Pending</span>
-                      ) : (
-                        <span className={'px-2 py-0.5 rounded text-xs font-medium ' + (darkMode ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-700')}>✗ Failed</span>
-                      )}
+                      <span className="font-medium text-sm">{feed.source}</span>
+                      {info.status === 'success' ? <span className="px-2 py-0.5 rounded text-xs bg-green-500/20 text-green-400">✓ Active</span> : info.status === 'pending' ? <span className="px-2 py-0.5 rounded text-xs bg-yellow-500/20 text-yellow-400">⏳ Pending</span> : <span className="px-2 py-0.5 rounded text-xs bg-red-500/20 text-red-400">✗ Failed</span>}
                     </div>
-                    {info.status === 'success' ? (
-                      <p className={'text-xs ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
-                        Fetched: {info.totalFetched} → Filtered: {info.count} articles
-                      </p>
-                    ) : info.status === 'pending' ? (
-                      <p className={'text-xs ' + (darkMode ? 'text-yellow-400' : 'text-yellow-600')}>
-                        Waiting for fetch... Refresh to load articles
-                      </p>
-                    ) : (
-                      <p className={'text-xs ' + (darkMode ? 'text-red-400' : 'text-red-600')}>
-                        Error: {info.error}
-                      </p>
-                    )}
+                    <p className="text-xs text-slate-400">{info.status === 'success' ? `Fetched: ${info.totalFetched} → Filtered: ${info.count}` : info.status === 'pending' ? 'Waiting... Refresh to load' : `Error: ${info.error}`}</p>
                   </div>
                 );
               })}
             </div>
-            <div className={'mt-4 p-3 rounded-lg text-sm ' + (darkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-700')}>
-              💡 <strong>Tip:</strong> Failed feeds may be due to RSS2JSON API issues or invalid feed URLs. Working feeds will update automatically every 30 minutes.
-            </div>
           </div>
-        )}
+        </section>
+      )}
 
-        {activeTab === 'all' && showWeeklySummary && (
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className={'text-xl font-bold flex items-center gap-2 ' + (darkMode ? 'text-white' : 'text-gray-900')}>
-                <Sparkles className={'w-5 h-5 ' + (darkMode ? 'text-blue-400' : 'text-blue-600')} />AI Architecture Insights
-              </h2>
-              <button onClick={() => setShowWeeklySummary(false)} className={'text-sm ' + (darkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-600 hover:text-gray-700')}>Hide</button>
-            </div>
-            <div className={'p-5 rounded-xl border ' + (darkMode ? 'bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-blue-500/30' : 'bg-gradient-to-br from-blue-50 to-purple-50 border-blue-200')}>
-              <p className={'text-sm leading-relaxed ' + (darkMode ? 'text-gray-300' : 'text-gray-700')}>
-                {gistStatus === 'connected' ? (
-                  <>✅ <strong>Cloud Sync Active!</strong> Archives auto-backup to GitHub. {archivedArticles.length} archived articles. Archive tab shows category chart. Click purple Filter icon to manage feeds.</>
-                ) : (
-                  <>Click the <strong>Cloud icon</strong> to enable GitHub backup. Click <strong>purple Filter icon</strong> to manage RSS feeds.</>
-                )} {articles.filter(a => !a.archived).length} articles, {archivedArticles.length} archived.
-              </p>
-            </div>
-          </div>
-        )}
+      {/* Tabs */}
+      <div className="max-w-7xl mx-auto px-4 py-4">
+        <div className="flex gap-2 mb-6">
+          <button onClick={() => setActiveTab('all')} className={'px-6 py-3 rounded-xl font-medium transition ' + (activeTab === 'all' ? 'bg-blue-500 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700')}>Recent ({articles.filter(a => !a.archived).length})</button>
+          <button onClick={() => setActiveTab('saved')} className={'px-6 py-3 rounded-xl font-medium transition flex items-center gap-2 ' + (activeTab === 'saved' ? 'bg-blue-500 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700')}><Heart className="w-4 h-4" fill={activeTab === 'saved' ? 'currentColor' : 'none'} />Saved ({savedArticles.length})</button>
+          <button onClick={() => setActiveTab('archive')} className={'px-6 py-3 rounded-xl font-medium transition flex items-center gap-2 ' + (activeTab === 'archive' ? 'bg-blue-500 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700')}><Archive className="w-4 h-4" />Archive ({articles.filter(a => a.archived).length})</button>
+        </div>
 
-        {activeTab === 'saved' && savedArticles.length === 0 && (
-          <div className={'text-center py-16 ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
-            <Heart className="w-16 h-16 mx-auto mb-4 opacity-50" />
-            <p className="text-xl">No saved articles yet</p>
-            <p className="text-sm mt-2">Bookmark articles to read them later</p>
-          </div>
-        )}
+        {/* Search & Add */}
+        <div className="relative mb-6">
+          <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-500" />
+          <input type="text" placeholder="Search articles..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-12 pr-32 py-4 rounded-xl border bg-slate-800/50 border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <button onClick={addArticleByURL} className="absolute right-2 top-1/2 transform -translate-y-1/2 px-4 py-2 rounded-lg text-sm font-medium bg-blue-500 text-white hover:bg-blue-600">+ Add Article</button>
+        </div>
+      </div>
 
-        {activeTab === 'archive' && articles.filter(a => a.archived).length === 0 && (
-          <div className={'text-center py-16 ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
-            <Archive className="w-16 h-16 mx-auto mb-4 opacity-50" />
-            <p className="text-xl">No archived articles yet</p>
-          </div>
-        )}
-
-        {activeTab === 'all' && showChart && chartData.length > 0 && (
-          <div className={'mb-8 p-6 rounded-xl border ' + (darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className={'text-lg font-bold ' + (darkMode ? 'text-white' : 'text-gray-900')}>Articles by Category</h2>
-              <button onClick={() => setShowChart(false)} className={'text-sm ' + (darkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-600 hover:text-gray-700')}>Hide</button>
-            </div>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={chartData} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? '#374151' : '#e5e7eb'} />
-                <XAxis type="number" tick={{ fill: darkMode ? '#9ca3af' : '#6b7280' }} />
-                <YAxis type="category" dataKey="name" width={180} tick={{ fill: darkMode ? '#9ca3af' : '#6b7280', fontSize: 13 }} />
-                <Tooltip contentStyle={{ backgroundColor: darkMode ? '#1f2937' : '#ffffff', border: '1px solid ' + (darkMode ? '#374151' : '#e5e7eb'), borderRadius: '8px' }} />
-                <Bar dataKey="count" radius={[0, 8, 8, 0]}>
-                  {chartData.map((entry, index) => <Cell key={'cell-' + index} fill={colors[index % colors.length]} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-
-        {activeTab === 'archive' && archiveChartData.length > 0 && (
-          <div className={'mb-8 p-6 rounded-xl border ' + (darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200')}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className={'text-lg font-bold flex items-center gap-2 ' + (darkMode ? 'text-white' : 'text-gray-900')}>
-                <Archive className="w-5 h-5" />
-                Archived Articles by Category
-              </h2>
-              <span className={'text-sm ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
-                {archivedArticles.length} total archived
-              </span>
-            </div>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={archiveChartData} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? '#374151' : '#e5e7eb'} />
-                <XAxis type="number" tick={{ fill: darkMode ? '#9ca3af' : '#6b7280' }} />
-                <YAxis type="category" dataKey="name" width={180} tick={{ fill: darkMode ? '#9ca3af' : '#6b7280', fontSize: 13 }} />
-                <Tooltip contentStyle={{ backgroundColor: darkMode ? '#1f2937' : '#ffffff', border: '1px solid ' + (darkMode ? '#374151' : '#e5e7eb'), borderRadius: '8px' }} />
-                <Bar dataKey="count" radius={[0, 8, 8, 0]}>
-                  {archiveChartData.map((entry, index) => <Cell key={'cell-' + index} fill={colors[index % colors.length]} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredArticles.map(article => (
-            <article key={article.id} className={'group rounded-lg p-4 border transition-all hover:shadow-xl hover:-translate-y-1 ' + (darkMode ? 'bg-gray-800 border-gray-700 hover:border-blue-500/50' : 'bg-white border-gray-200 hover:border-blue-300')}>
+      {/* Articles Grid */}
+      <section className="max-w-7xl mx-auto px-4 pb-16">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {filteredArticles.map((article, idx) => (
+            <article key={article.id} className="rounded-xl p-4 border bg-slate-800/30 backdrop-blur-xl border-slate-700/50 hover:border-blue-500/50 transition-all hover:-translate-y-1 hover:shadow-2xl" style={{ animation: 'fadeInUp 0.6s ease-out forwards', animationDelay: `${idx * 0.05}s`, opacity: 0 }}>
               <div className="flex items-start justify-between mb-2">
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-2">
                   <span className="text-lg">{article.sourceLogo}</span>
-                  <span className={'text-xs font-medium ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>{article.source}</span>
+                  <span className="text-xs text-slate-400">{article.source}</span>
                 </div>
-                <button onClick={() => toggleSave(article.id)} className={'relative ' + (savedArticles.includes(article.id) ? 'text-yellow-500' : (darkMode ? 'text-gray-500 hover:text-yellow-400' : 'text-gray-400 hover:text-yellow-500'))}>
-                  <Bookmark className="w-4 h-4" fill={savedArticles.includes(article.id) ? 'currentColor' : 'none'} />
-                </button>
+                <button onClick={() => toggleSave(article.id)} className={savedArticles.includes(article.id) ? 'text-yellow-500' : 'text-slate-500 hover:text-yellow-400'}><Bookmark className="w-4 h-4" fill={savedArticles.includes(article.id) ? 'currentColor' : 'none'} /></button>
               </div>
               {(article.archived || article.manual) && (
-                <div className="flex gap-1.5 mb-2">
-                  {article.archived && (
-                    <div className={'px-1.5 py-0.5 rounded text-xs inline-block ' + (darkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-600')}>
-                      <Archive className="w-2.5 h-2.5 inline mr-0.5" />
-                      Archived
-                    </div>
-                  )}
-                  {article.manual && (
-                    <div className={'px-1.5 py-0.5 rounded text-xs inline-block ' + (darkMode ? 'bg-green-500/20 text-green-400' : 'bg-green-100 text-green-700')}>
-                      ✓ Manual
-                    </div>
-                  )}
+                <div className="flex gap-2 mb-2">
+                  {article.archived && <div className="px-2 py-0.5 rounded text-xs bg-slate-700 text-slate-400"><Archive className="w-3 h-3 inline mr-1" />Archived</div>}
+                  {article.manual && <div className="px-2 py-0.5 rounded text-xs bg-green-500/20 text-green-400">✓ Manual</div>}
                 </div>
               )}
-              <h2 className={'text-sm font-bold mb-2 line-clamp-2 group-hover:text-blue-500 transition ' + (darkMode ? 'text-white' : 'text-gray-900')}>{article.title}</h2>
-              <p className={'text-xs mb-2 line-clamp-2 ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>{article.summary}</p>
+              <h2 className="text-sm font-bold mb-2 line-clamp-2 group-hover:text-blue-400 transition">{article.title}</h2>
+              <p className="text-xs mb-2 line-clamp-2 text-slate-400">{article.summary}</p>
               {article.keywords.length > 0 && (
                 <div className="flex flex-wrap gap-1 mb-2">
-                  {article.keywords.slice(0, 3).map((kw, i) => <span key={i} className={'px-1.5 py-0.5 rounded text-xs ' + (darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-700')}>{kw}</span>)}
+                  {article.keywords.slice(0, 3).map((kw, i) => <span key={i} className="px-2 py-0.5 rounded text-xs bg-slate-700 text-slate-300">{kw}</span>)}
                 </div>
               )}
-              <div className="flex flex-wrap gap-1.5 mb-2">
-                <span className={'px-1.5 py-0.5 rounded-md text-xs font-medium ' + (darkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-700')}>{article.category}</span>
-                {article.trending && <span className={'px-1.5 py-0.5 rounded-md text-xs flex items-center gap-0.5 ' + (darkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-700')}><TrendingUp className="w-2.5 h-2.5" />Trending</span>}
+              <div className="flex flex-wrap gap-2 mb-2">
+                <span className="px-2 py-0.5 rounded text-xs bg-blue-500/10 text-blue-400">{article.category}</span>
+                {article.trending && <span className="px-2 py-0.5 rounded text-xs flex items-center gap-1 bg-orange-500/10 text-orange-400"><TrendingUp className="w-3 h-3" />Trending</span>}
               </div>
-              
-              <div className={'flex items-center justify-between gap-2 mb-2 pb-2 border-b ' + (darkMode ? 'border-gray-700' : 'border-gray-200')}>
+              <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-slate-700">
                 {!article.archived ? (
-                  <button onClick={() => archiveArticle(article.id)} className={'flex items-center gap-0.5 px-2 py-1 rounded text-xs font-medium transition ' + (darkMode ? 'bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20' : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100')}>
-                    <Archive className="w-3 h-3" />
-                    Archive
-                  </button>
+                  <button onClick={() => archiveArticle(article.id)} className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20"><Archive className="w-3 h-3" />Archive</button>
                 ) : (
-                  <button onClick={() => restoreArticle(article.id)} className={'flex items-center gap-0.5 px-2 py-1 rounded text-xs font-medium transition ' + (darkMode ? 'bg-green-500/10 text-green-400 hover:bg-green-500/20' : 'bg-green-50 text-green-700 hover:bg-green-100')}>
-                    <ArchiveRestore className="w-3 h-3" />
-                    Restore
-                  </button>
+                  <button onClick={() => restoreArticle(article.id)} className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-green-500/10 text-green-400 hover:bg-green-500/20"><ArchiveRestore className="w-3 h-3" />Restore</button>
                 )}
-                <button onClick={() => deleteArticle(article.id)} className={'flex items-center gap-0.5 px-2 py-1 rounded text-xs font-medium transition ' + (darkMode ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20' : 'bg-red-50 text-red-700 hover:bg-red-100')}>
-                  <Trash2 className="w-3 h-3" />
-                  Delete
-                </button>
+                <button onClick={() => deleteArticle(article.id)} className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-red-500/10 text-red-400 hover:bg-red-500/20"><Trash2 className="w-3 h-3" />Delete</button>
               </div>
-
-              <div className={'flex items-center justify-between pt-1'}>
-                <div className="flex items-center gap-2 text-xs">
-                  <span className={'flex items-center gap-0.5 ' + (darkMode ? 'text-gray-500' : 'text-gray-500')}><Clock className="w-3 h-3" />{article.readTime} min</span>
-                  <span className={'flex items-center gap-0.5 ' + (darkMode ? 'text-gray-500' : 'text-gray-500')}>
-                    <Calendar className="w-3 h-3" />
-                    {activeTab === 'archive' ? new Date(article.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : getRelativeTime(article.date)}
-                  </span>
+              <div className="flex items-center justify-between pt-1">
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{article.readTime} min</span>
+                  <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{getRelativeTime(article.date)}</span>
                 </div>
-                <a href={article.url} target="_blank" rel="noopener noreferrer" className={'flex items-center gap-0.5 text-xs font-medium ' + (darkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700')}>
-                  Read<ExternalLink className="w-3 h-3" />
-                </a>
+                <a href={article.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs font-medium text-blue-400 hover:text-blue-300">Read<ExternalLink className="w-3 h-3" /></a>
               </div>
             </article>
           ))}
         </div>
+      </section>
 
-        {filteredArticles.length === 0 && !loading && (
-          <div className={'text-center py-16 ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
-            <Building2 className="w-16 h-16 mx-auto mb-4 opacity-50" />
-            <p className="text-xl">No articles found</p>
-          </div>
-        )}
-      </main>
+      <style>{`
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeInDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes growBar { from { width: 0; } }
+        @keyframes pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.6; } }
+      `}</style>
     </div>
   );
 };
