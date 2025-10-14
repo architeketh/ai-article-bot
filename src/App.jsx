@@ -8,6 +8,7 @@ const App = () => {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedSource, setSelectedSource] = useState('all');
   const [sortBy, setSortBy] = useState('date');
+  const [showOnlyNewToday, setShowOnlyNewToday] = useState(false);
   const [savedArticles, setSavedArticles] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
   const [showChart, setShowChart] = useState(true);
@@ -615,7 +616,19 @@ const App = () => {
     const matchesSearch = article.title.toLowerCase().includes(searchQuery.toLowerCase()) || article.summary.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = selectedCategory === 'all' || article.category === selectedCategory;
     const matchesSource = selectedSource === 'all' || article.source === selectedSource;
-    return matchesSearch && matchesCategory && matchesSource;
+    
+    // Check if article is from today
+    const isNewToday = (() => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const articleDate = new Date(article.date);
+      articleDate.setHours(0, 0, 0, 0);
+      return articleDate.getTime() === today.getTime();
+    })();
+    
+    const matchesNewToday = !showOnlyNewToday || isNewToday;
+    
+    return matchesSearch && matchesCategory && matchesSource && matchesNewToday;
   }).sort((a, b) => {
     if (activeTab === 'archive') return b.date - a.date;
     return sortBy === 'date' ? b.date - a.date : b.trending - a.trending;
@@ -862,14 +875,14 @@ const App = () => {
 
           {/* Tabs with Gradient Active State */}
           <div className="flex gap-1.5 sm:gap-2 mb-4 sm:mb-6 overflow-x-auto pb-2">
-            <button onClick={() => setActiveTab('all')} className={'px-3 sm:px-6 py-1.5 sm:py-2.5 rounded-full font-medium transition-all hover:scale-105 text-xs sm:text-base whitespace-nowrap ' + (activeTab === 'all' ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg' : (darkMode ? 'bg-gray-900 text-gray-400 hover:bg-gray-800' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'))}>
+            <button onClick={() => { setActiveTab('all'); setShowOnlyNewToday(false); }} className={'px-3 sm:px-6 py-1.5 sm:py-2.5 rounded-full font-medium transition-all hover:scale-105 text-xs sm:text-base whitespace-nowrap ' + (activeTab === 'all' ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg' : (darkMode ? 'bg-gray-900 text-gray-400 hover:bg-gray-800' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'))}>
               Recent ({articles.filter(a => !a.archived).length})
             </button>
-            <button onClick={() => setActiveTab('saved')} className={'px-3 sm:px-6 py-1.5 sm:py-2.5 rounded-full font-medium flex items-center gap-1 sm:gap-2 transition-all hover:scale-105 whitespace-nowrap text-xs sm:text-base ' + (activeTab === 'saved' ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-lg' : (darkMode ? 'bg-gray-900 text-gray-400 hover:bg-gray-800' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'))}>
+            <button onClick={() => { setActiveTab('saved'); setShowOnlyNewToday(false); }} className={'px-3 sm:px-6 py-1.5 sm:py-2.5 rounded-full font-medium flex items-center gap-1 sm:gap-2 transition-all hover:scale-105 whitespace-nowrap text-xs sm:text-base ' + (activeTab === 'saved' ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-lg' : (darkMode ? 'bg-gray-900 text-gray-400 hover:bg-gray-800' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'))}>
               <Heart className="w-3 h-3 sm:w-4 sm:h-4" fill={activeTab === 'saved' ? 'currentColor' : 'none'} />
               Saved ({savedArticles.length})
             </button>
-            <button onClick={() => setActiveTab('archive')} className={'px-3 sm:px-6 py-1.5 sm:py-2.5 rounded-full font-medium flex items-center gap-1 sm:gap-2 transition-all hover:scale-105 whitespace-nowrap text-xs sm:text-base ' + (activeTab === 'archive' ? 'bg-gradient-to-r from-orange-500 to-yellow-500 text-white shadow-lg' : (darkMode ? 'bg-gray-900 text-gray-400 hover:bg-gray-800' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'))}>
+            <button onClick={() => { setActiveTab('archive'); setShowOnlyNewToday(false); }} className={'px-3 sm:px-6 py-1.5 sm:py-2.5 rounded-full font-medium flex items-center gap-1 sm:gap-2 transition-all hover:scale-105 whitespace-nowrap text-xs sm:text-base ' + (activeTab === 'archive' ? 'bg-gradient-to-r from-orange-500 to-yellow-500 text-white shadow-lg' : (darkMode ? 'bg-gray-900 text-gray-400 hover:bg-gray-800' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'))}>
               <Archive className="w-3 h-3 sm:w-4 sm:h-4" />
               Archive ({archivedArticles.length})
             </button>
@@ -892,6 +905,12 @@ const App = () => {
             <button onClick={() => setShowFilters(!showFilters)} className={'flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-full transition-all hover:scale-105 text-xs sm:text-sm whitespace-nowrap ' + (darkMode ? 'bg-gray-900 text-gray-400 hover:bg-gray-800' : 'bg-gray-100 hover:bg-gray-200')}>
               <Filter className="w-3 h-3 sm:w-4 sm:h-4" />Filters
             </button>
+            {activeTab === 'all' && newTodayCount > 0 && (
+              <button onClick={() => setShowOnlyNewToday(!showOnlyNewToday)} className={'flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-full transition-all hover:scale-105 text-xs sm:text-sm whitespace-nowrap ' + (showOnlyNewToday ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg' : (darkMode ? 'bg-gray-900 text-gray-400 hover:bg-gray-800' : 'bg-gray-100 hover:bg-gray-200'))}>
+                <Sparkles className="w-3 h-3 sm:w-4 sm:h-4" />
+                New Today ({newTodayCount})
+              </button>
+            )}
             {activeCategories.slice(0, 8).map(cat => (
               <button key={cat} onClick={() => setSelectedCategory(cat)} className={'px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-full text-xs sm:text-sm font-medium whitespace-nowrap transition-all hover:scale-105 ' + (selectedCategory === cat ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg' : (darkMode ? 'bg-gray-900 text-gray-400 hover:bg-gray-800' : 'bg-gray-100 hover:bg-gray-200'))}>
                 {cat === 'all' ? 'All' : cat}
