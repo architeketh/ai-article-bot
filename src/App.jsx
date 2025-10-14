@@ -265,8 +265,17 @@ const App = () => {
 
   const categorizeArticle = (title, description, defaultCategory) => {
     const text = (title + ' ' + description).toLowerCase();
+    
+    // Chat Engines - check first for specificity
+    if (text.match(/chatgpt|gpt-4|gpt-3|claude|perplexity|gemini|bard|copilot|bing chat|llama/)) return 'Chat Engines';
+    
+    // Residential vs Commercial
+    if (text.match(/residential|house|home|apartment|villa|housing|single.family|multi.family/)) return 'Residential';
+    if (text.match(/commercial|office|retail|hotel|restaurant|hospitality|workplace|corporate/)) return 'Commercial';
+    
+    // More specific categorization
     if (text.match(/design process|workflow|collaboration|practice/)) return 'Design Process';
-    if (text.match(/tool|software|app|platform|midjourney|dall-e|chatgpt/)) return 'AI Tools';
+    if (text.match(/tool|software|app|platform|midjourney|dall-e|plugin|extension/)) return 'AI Tools';
     if (text.match(/machine learning|deep learning|neural network/)) return 'Machine Learning';
     if (text.match(/generative|parametric|computational|algorithm/)) return 'Generative Design';
     if (text.match(/bim|revit|archicad|building information/)) return 'BIM & Digital Tools';
