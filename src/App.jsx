@@ -1,109 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import {
-  Search, Filter, Bookmark, TrendingUp, Clock, ExternalLink, Moon, Sun, Building2,
-  BarChart3, Calendar, Sparkles, RefreshCw, AlertCircle, Heart, Archive, ArchiveRestore,
-  Trash2, Download, Upload, Database, Cloud, CloudOff, Settings, X, Mail, RotateCcw
-} from 'lucide-react';
+import { Search, Filter, Bookmark, TrendingUp, Clock, ExternalLink, Moon, Sun, Building2, BarChart3, Calendar, Sparkles, RefreshCw, AlertCircle, Heart, Archive, ArchiveRestore, Trash2, Download, Upload, Database, Cloud, CloudOff, Settings, Check, X, Mail } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-
-/* =========================
-   Constants / helpers
-   ========================= */
-const DEFAULT_PUBLIC_GIST_ID = 'e89e6b358e664cc9bbe2ed4bd0233638';
-const GIST_FILENAME = 'ai-architecture-articles.json';
-
-const reviveDates = (list = []) =>
-  list.map(a => ({ ...a, date: a?.date ? new Date(a.date) : new Date() }));
-
-// Merge two arrays of article objects by id, prefer left-most item
-function mergeById(primary = [], secondary = []) {
-  const map = new Map();
-  [...secondary, ...primary].forEach(a => { if (a && a.id) map.set(a.id, a); });
-  return Array.from(map.values());
-}
-
-// Make a unique list by id and overlay "archived" status from archivedList
-function overlayArticles(baseList = [], archivedList = []) {
-  const byId = new Map();
-  baseList.forEach(a => { if (a?.id) byId.set(a.id, { ...a, archived: !!a.archived }); });
-  const archivedIds = new Set(archivedList.map(a => a.id));
-  archivedList.forEach(a => {
-    if (!a?.id) return;
-    const existing = byId.get(a.id);
-    if (existing) byId.set(a.id, { ...existing, archived: true });
-    else byId.set(a.id, { ...a, archived: true });
-  });
-  return Array.from(byId.values());
-}
-
-// Safe-set localStorage only if incoming has items; otherwise preserve existing
-function setLSMerged(key, incomingList = []) {
-  const existing = JSON.parse(localStorage.getItem(key) || '[]');
-  const revivedExisting = reviveDates(existing);
-  const revivedIncoming = reviveDates(incomingList);
-  const merged = incomingList.length ? mergeById(revivedIncoming, revivedExisting) : revivedExisting;
-  localStorage.setItem(key, JSON.stringify(merged));
-  return merged;
-}
-
-/* =========================
-   Gist read helper (token → public)
-   ========================= */
-async function getGistPayload({ gistId, token }) {
-  const metaHeaders = token ? { Authorization: `Bearer ${token}` } : {};
-  const metaRes = await fetch(`https://api.github.com/gists/${gistId}`, { headers: metaHeaders });
-  if (!metaRes.ok) throw new Error(`Gist meta fetch failed: ${metaRes.status}`);
-  const meta = await metaRes.json();
-  const file = meta.files?.[GIST_FILENAME];
-  if (!file?.raw_url) throw new Error(`Gist missing ${GIST_FILENAME}`);
-
-  const rawRes = await fetch(file.raw_url);
-  if (!rawRes.ok) throw new Error(`Gist raw fetch failed: ${rawRes.status}`);
-  const data = await rawRes.json();
-
-  return {
-    articles: Array.isArray(data.articles) ? data.articles : [],
-    savedArticles: Array.isArray(data.savedArticles) ? data.savedArticles : [],
-    archivedArticles: Array.isArray(data.archivedArticles) ? data.archivedArticles : [],
-    deletedArticles: Array.isArray(data.deletedArticles) ? data.deletedArticles : []
-  };
-}
-
-/* =========================
-   RSS provider fallback
-   ========================= */
-async function fetchFeedItems(feedUrl) {
-  // Provider A: rss2json (with key)
-  try {
-    const a = await fetch(
-      'https://api.rss2json.com/v1/api.json?rss_url=' +
-        encodeURIComponent(feedUrl) +
-        '&api_key=q1ihf2w1uk1uwljssn3dngzhms9ajhqjpzfpqgf4&count=50'
-    );
-    if (a.ok) {
-      const data = await a.json();
-      if (data?.status === 'ok' && Array.isArray(data.items)) return data.items;
-    }
-  } catch {}
-
-  // Provider B: feed2json (no key)
-  try {
-    const b = await fetch('https://feed2json.org/convert?url=' + encodeURIComponent(feedUrl));
-    if (b.ok) {
-      const data = await b.json();
-      if (Array.isArray(data.items)) {
-        return data.items.map(it => ({
-          title: it.title,
-          description: it.summary || it.content_html || '',
-          link: it.url,
-          pubDate: it.date_published
-        }));
-      }
-    }
-  } catch {}
-
-  return [];
-}
 
 const App = () => {
   const [darkMode, setDarkMode] = useState(true);
@@ -150,7 +47,6 @@ const App = () => {
     window.location.href = `mailto:architek.eth@gmail.com?subject=${subject}&body=${body}`;
   };
 
-  // Basic settings load + quiet view counter
   useEffect(() => {
     const savedToken = localStorage.getItem('githubGistToken');
     const savedGistId = localStorage.getItem('githubGistId');
@@ -161,103 +57,65 @@ const App = () => {
         setGistStatus('connected');
       }
     }
-
+    
     const savedFeeds = localStorage.getItem('customFeeds');
     if (savedFeeds) {
-      try { setCustomFeeds(JSON.parse(savedFeeds)); } catch {}
+      try {
+        const parsedFeeds = JSON.parse(savedFeeds);
+        setCustomFeeds(parsedFeeds);
+      } catch (e) {
+        console.error('Error loading custom feeds:', e);
+      }
     }
 
     const fetchViewCount = async () => {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 2500);
       try {
-        const response = await fetch('https://api.countapi.xyz/hit/ai-architecture-news/visits', { signal: ctrl.signal });
-        clearTimeout(t);
-        if (!response.ok) throw new Error('countapi non-200');
+        const response = await fetch('https://api.countapi.xyz/hit/ai-architecture-news/visits');
         const data = await response.json();
-        if (data.value) setViewCount(data.value);
-      } catch {
-        const sessionViews = parseInt(localStorage.getItem('sessionViews') || '0', 10) + 1;
-        localStorage.setItem('sessionViews', String(sessionViews));
+        if (data.value) {
+          setViewCount(data.value);
+        }
+      } catch (err) {
+        const sessionViews = parseInt(localStorage.getItem('sessionViews') || '0') + 1;
+        localStorage.setItem('sessionViews', sessionViews.toString());
         setViewCount(sessionViews);
       }
     };
+    
     fetchViewCount();
   }, []);
 
-  // One-time migration: resurrect archived from cached if empty
-  useEffect(() => {
-    const archivedLS = JSON.parse(localStorage.getItem('archivedArticles') || '[]');
-    if (!archivedLS.length) {
-      const cached = JSON.parse(localStorage.getItem('cachedArticles') || '[]');
-      const archivedFromCache = reviveDates(cached).filter(a => a.archived);
-      if (archivedFromCache.length) {
-        localStorage.setItem('archivedArticles', JSON.stringify(archivedFromCache));
-      }
-    }
-  }, []);
-
-  /* ======================================================
-     BOOT: always attempt a Gist pull first (token → public)
-     ====================================================== */
-  useEffect(() => {
-    (async () => {
-      try {
-        const gid = (localStorage.getItem('githubGistId') || '').trim() || DEFAULT_PUBLIC_GIST_ID;
-        const token = localStorage.getItem('githubGistToken') || '';
-
-        let payload;
-        try {
-          payload = await getGistPayload({ gistId: gid, token });
-        } catch {
-          payload = await getGistPayload({ gistId: gid, token: '' });
-        }
-
-        const importedArticles  = reviveDates(payload.articles);
-        const importedSaved     = payload.savedArticles;
-        const importedArchived  = reviveDates(payload.archivedArticles);
-        const importedDeleted   = payload.deletedArticles;
-
-        if (importedArticles.length) localStorage.setItem('cachedArticles', JSON.stringify(importedArticles));
-        if (importedSaved.length) {
-          const existingSaved = JSON.parse(localStorage.getItem('savedArticles') || '[]');
-          const mergedSaved = Array.from(new Set([...existingSaved, ...importedSaved]));
-          localStorage.setItem('savedArticles', JSON.stringify(mergedSaved));
-          setSavedArticles(mergedSaved);
-        }
-        if (importedArchived.length) setLSMerged('archivedArticles', importedArchived);
-        if (importedDeleted.length) {
-          const existingDeleted = JSON.parse(localStorage.getItem('deletedArticles') || '[]');
-          const mergedDel = Array.from(new Set([...existingDeleted, ...importedDeleted]));
-          localStorage.setItem('deletedArticles', JSON.stringify(mergedDel));
-        }
-
-        // Paint UI with de-duped overlay and persist cache
-        const overlayed = overlayArticles(
-          importedArticles.length ? importedArticles : JSON.parse(localStorage.getItem('cachedArticles') || '[]'),
-          JSON.parse(localStorage.getItem('archivedArticles') || '[]')
-        );
-        if (overlayed.length) {
-          setArticles(overlayed);
-          localStorage.setItem('cachedArticles', JSON.stringify(overlayed));
-        }
-      } catch (e) {
-        console.warn('Boot Gist load skipped:', e.message || e);
-      }
-    })();
-  }, []);
-
-  const handleOpenFeedManager = () => setShowFeedManager(true);
+  const handleOpenFeedManager = () => {
+    setShowFeedManager(true);
+  };
 
   const addFeed = () => {
-    const url = prompt('Enter RSS feed URL:'); if (!url?.trim()) return;
-    const source = prompt('Enter source name:'); if (!source?.trim()) return;
-    const category = prompt('Enter category:'); const logo = prompt('Enter emoji logo:') || '📰';
-    const newFeed = { url: url.trim(), source: source.trim(), category: category?.trim() || 'General', logo, priority: 1, requireBoth: false, enabled: true };
+    const url = prompt('Enter RSS feed URL:');
+    if (!url || !url.trim()) return;
+    
+    const source = prompt('Enter source name:');
+    if (!source || !source.trim()) return;
+    
+    const category = prompt('Enter category:');
+    const logo = prompt('Enter emoji logo:') || '📰';
+    
+    const newFeed = {
+      url: url.trim(),
+      source: source.trim(),
+      category: category?.trim() || 'General',
+      logo: logo,
+      priority: 1,
+      requireBoth: false,
+      enabled: true
+    };
+    
     const updatedFeeds = [...(customFeeds.length > 0 ? customFeeds : DEFAULT_RSS_FEEDS), newFeed];
     setCustomFeeds(updatedFeeds);
     localStorage.setItem('customFeeds', JSON.stringify(updatedFeeds));
-    if (confirm('✅ Feed added! Refresh now?')) window.location.reload();
+    
+    if (confirm('✅ Feed added! Refresh now?')) {
+      window.location.reload();
+    }
   };
 
   const toggleFeed = (index) => {
@@ -265,7 +123,10 @@ const App = () => {
     feedsToUpdate[index].enabled = !feedsToUpdate[index].enabled;
     setCustomFeeds(feedsToUpdate);
     localStorage.setItem('customFeeds', JSON.stringify(feedsToUpdate));
-    if (confirm(`Feed ${feedsToUpdate[index].enabled ? 'enabled' : 'disabled'}! Refresh now?`)) window.location.reload();
+    
+    if (confirm(`Feed ${feedsToUpdate[index].enabled ? 'enabled' : 'disabled'}! Refresh now?`)) {
+      window.location.reload();
+    }
   };
 
   const deleteFeed = (index) => {
@@ -274,7 +135,10 @@ const App = () => {
       feedsToUpdate.splice(index, 1);
       setCustomFeeds(feedsToUpdate);
       localStorage.setItem('customFeeds', JSON.stringify(feedsToUpdate));
-      if (confirm('Feed deleted! Refresh now?')) window.location.reload();
+      
+      if (confirm('Feed deleted! Refresh now?')) {
+        window.location.reload();
+      }
     }
   };
 
@@ -282,61 +146,45 @@ const App = () => {
     if (confirm('Reset to default feeds?')) {
       setCustomFeeds([]);
       localStorage.removeItem('customFeeds');
-      if (confirm('✅ Reset! Refresh now?')) window.location.reload();
+      
+      if (confirm('✅ Reset! Refresh now?')) {
+        window.location.reload();
+      }
     }
   };
 
-  // Sync to Gist (uses union of archived, avoids empty articles)
   const syncToGist = async () => {
     if (!gistToken) return;
     try {
       setGistStatus('syncing');
-
-      const localArchived = reviveDates(JSON.parse(localStorage.getItem('archivedArticles') || '[]'));
-      const stateArchived = articles.filter(a => a.archived);
-      const archivedUnion = mergeById(stateArchived, localArchived);
-
-      const cached = JSON.parse(localStorage.getItem('cachedArticles') || '[]');
-      const articlesForExport = articles.length ? articles : cached;
-
       const data = {
         exportDate: new Date().toISOString(),
         version: '1.0',
-        articles: articlesForExport,
-        savedArticles,
-        archivedArticles: archivedUnion,
+        articles: articles,
+        savedArticles: savedArticles,
+        archivedArticles: articles.filter(a => a.archived),
         deletedArticles: JSON.parse(localStorage.getItem('deletedArticles') || '[]')
       };
       const gistData = {
         description: 'AI Architecture Articles Backup',
-        public: true,
-        files: { [GIST_FILENAME]: { content: JSON.stringify(data, null, 2) } }
+        public: false,
+        files: { 'ai-architecture-articles.json': { content: JSON.stringify(data, null, 2) } }
       };
-
-      const authHeader = gistToken ? { 'Authorization': `Bearer ${gistToken}` } : {};
       let response;
       if (gistId) {
         response = await fetch(`https://api.github.com/gists/${gistId}`, {
           method: 'PATCH',
-          headers: { ...authHeader, 'Content-Type': 'application/json' },
+          headers: { 'Authorization': `token ${gistToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify(gistData)
         });
       } else {
         response = await fetch('https://api.github.com/gists', {
           method: 'POST',
-          headers: { ...authHeader, 'Content-Type': 'application/json' },
+          headers: { 'Authorization': `token ${gistToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify(gistData)
         });
       }
-
-      if (response.status === 401 || response.status === 403) {
-        setGistStatus('error');
-        setGistError('Unauthorized. Check token permissions and that this token owns the Gist.');
-        console.warn('Gist sync disabled for this session after auth error.');
-        return;
-      }
-      if (!response.ok) throw new Error(`Failed to sync: ${response.status}`);
-
+      if (!response.ok) throw new Error('Failed to sync');
       const result = await response.json();
       if (!gistId) {
         setGistId(result.id);
@@ -350,45 +198,45 @@ const App = () => {
     }
   };
 
-  // Autosync only when token exists and articles are loaded
   useEffect(() => {
-    if (!gistToken) return;
-    if (!articles.length || loading) return;
-    const timer = setTimeout(() => { syncToGist(); }, 3000);
-    return () => clearTimeout(timer);
-  }, [articles, savedArticles, gistToken, loading]);
+    if (gistToken && articles.length > 0 && !loading) {
+      const timer = setTimeout(() => { syncToGist(); }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [articles, savedArticles, gistToken]);
 
-  // Load from Gist (public-first, merge archives) — NO reloads
   const loadFromGist = async () => {
-    const gid = (gistId || DEFAULT_PUBLIC_GIST_ID).trim();
+    if (!gistToken || !gistId) return;
     try {
-      let payload;
-      try { payload = await getGistPayload({ gistId: gid, token: gistToken || '' }); }
-      catch { payload = await getGistPayload({ gistId: gid, token: '' }); }
-
-      const importedArticles = reviveDates(payload.articles || []);
-      const importedSaved    = payload.savedArticles || [];
-      const importedArchived = reviveDates(payload.archivedArticles || []);
-      const importedDeleted  = payload.deletedArticles || [];
-
-      const mergedArchived = setLSMerged('archivedArticles', importedArchived);
-      const existingDeleted = JSON.parse(localStorage.getItem('deletedArticles') || '[]');
-      const mergedDeleted = importedDeleted.length ? Array.from(new Set([...existingDeleted, ...importedDeleted])) : existingDeleted;
-      const mergedSaved = Array.from(new Set([...(JSON.parse(localStorage.getItem('savedArticles') || '[]')), ...importedSaved]));
-
-      localStorage.setItem('deletedArticles', JSON.stringify(mergedDeleted));
-      localStorage.setItem('savedArticles', JSON.stringify(mergedSaved));
-      setSavedArticles(mergedSaved);
-      if (importedArticles.length) localStorage.setItem('cachedArticles', JSON.stringify(importedArticles));
-
-      // De-dupe + overlay and persist
-      const overlayed = overlayArticles(importedArticles, mergedArchived);
-      setArticles(overlayed);
-      localStorage.setItem('cachedArticles', JSON.stringify(overlayed));
-
+      setGistStatus('syncing');
+      const response = await fetch(`https://api.github.com/gists/${gistId}`, {
+        headers: { 'Authorization': `token ${gistToken}` }
+      });
+      if (!response.ok) throw new Error('Failed to load');
+      const gist = await response.json();
+      const fileContent = gist.files['ai-architecture-articles.json']?.content;
+      if (!fileContent) throw new Error('No data found');
+      const data = JSON.parse(fileContent);
+      if (data.savedArticles) {
+        setSavedArticles(data.savedArticles);
+        localStorage.setItem('savedArticles', JSON.stringify(data.savedArticles));
+      }
+      if (data.archivedArticles) localStorage.setItem('archivedArticles', JSON.stringify(data.archivedArticles));
+      if (data.deletedArticles) localStorage.setItem('deletedArticles', JSON.stringify(data.deletedArticles));
+      const manualArticles = (data.articles || []).filter(a => a.manual);
+      if (manualArticles.length > 0) localStorage.setItem('manualArticles', JSON.stringify(manualArticles));
+      
+      // CRITICAL FIX: Update cachedArticles to include manual articles so they show immediately on reload
+      const cachedArticles = JSON.parse(localStorage.getItem('cachedArticles') || '[]');
+      const manualIds = new Set(manualArticles.map(a => a.id));
+      const cachedWithoutManual = cachedArticles.filter(a => !a.manual);
+      const updatedCache = [...manualArticles, ...cachedWithoutManual];
+      localStorage.setItem('cachedArticles', JSON.stringify(updatedCache));
+      
       setGistStatus('connected');
       setGistError('');
-      alert('✅ Loaded from GitHub Gist!');
+      alert('✅ Loaded from GitHub!');
+      setTimeout(() => { window.location.reload(); }, 1000);
     } catch (err) {
       setGistStatus('error');
       setGistError(err.message);
@@ -426,9 +274,15 @@ const App = () => {
 
   const categorizeArticle = (title, description, defaultCategory) => {
     const text = (title + ' ' + description).toLowerCase();
+    
+    // Chat Engines - check first for specificity
     if (text.match(/chatgpt|gpt-4|gpt-3|claude|perplexity|gemini|bard|copilot|bing chat|llama/)) return 'Chat Engines';
+    
+    // Residential vs Commercial
     if (text.match(/residential|house|home|apartment|villa|housing|single.family|multi.family/)) return 'Residential';
     if (text.match(/commercial|office|retail|hotel|restaurant|hospitality|workplace|corporate/)) return 'Commercial';
+    
+    // More specific categorization
     if (text.match(/design process|workflow|collaboration|practice/)) return 'Design Process';
     if (text.match(/tool|software|app|platform|midjourney|dall-e|plugin|extension/)) return 'AI Tools';
     if (text.match(/machine learning|deep learning|neural network/)) return 'Machine Learning';
@@ -449,15 +303,15 @@ const App = () => {
     const foundKeywords = [];
     const lowerText = text.toLowerCase();
     const keywordGroups = {
-      'midjourney': ['midjourney'],
-      'stable diffusion': ['stable diffusion'],
+      'midjourney': ['midjourney'], 
+      'stable diffusion': ['stable diffusion'], 
       'enscape': ['enscape'],
-      'lumion': ['lumion'],
+      'lumion': ['lumion'], 
       'ai rendering': ['ai.*render', 'render.*ai', 'lookx', 'veras'],
-      'chatgpt': ['chatgpt', 'gpt'],
+      'chatgpt': ['chatgpt', 'gpt'], 
       'generative design': ['generative', 'parametric'],
       'visualization': ['visualization', 'photorealistic'],
-      'bim': ['bim', 'revit'],
+      'bim': ['bim', 'revit'], 
       'machine learning': ['machine learning', 'ml', 'neural'],
       'computational': ['algorithm', 'computational'],
       'vr/ar': ['virtual reality', 'augmented reality', 'vr', 'ar'],
@@ -470,19 +324,15 @@ const App = () => {
   };
 
   const exportData = (type = 'all') => {
-    const localArchived = reviveDates(JSON.parse(localStorage.getItem('archivedArticles') || '[]'));
-    const stateArchived = articles.filter(a => a.archived);
-    const archivedUnion = mergeById(stateArchived, localArchived);
-
     const exportData = {
-      exportDate: new Date().toISOString(),
-      version: '1.0',
-      articles,
-      savedArticles,
-      archivedArticles: archivedUnion
+      exportDate: new Date().toISOString(), 
+      version: '1.0', 
+      articles: articles, 
+      savedArticles: savedArticles,
+      archivedArticles: articles.filter(a => a.archived)
     };
     let dataToExport, filename;
-    switch (type) {
+    switch(type) {
       case 'archived':
         dataToExport = { ...exportData, articles: exportData.archivedArticles };
         filename = `archived-${new Date().toISOString().split('T')[0]}.json`;
@@ -519,23 +369,13 @@ const App = () => {
         const confirmed = confirm(`Import ${importedData.articles.length} articles?`);
         if (!confirmed) return;
         const existingIds = new Set(articles.map(a => a.id));
-        const newArticles = reviveDates(importedData.articles).filter(a => !existingIds.has(a.id));
+        const newArticles = importedData.articles.filter(a => !existingIds.has(a.id));
         setArticles(prev => [...prev, ...newArticles]);
-
-        if (Array.isArray(importedData.savedArticles)) {
-          const mergedSaved = Array.from(new Set([...(JSON.parse(localStorage.getItem('savedArticles') || '[]')), ...importedData.savedArticles]));
-          setSavedArticles(mergedSaved);
-          localStorage.setItem('savedArticles', JSON.stringify(mergedSaved));
+        if (importedData.savedArticles) {
+          const newSaved = [...new Set([...savedArticles, ...importedData.savedArticles])];
+          setSavedArticles(newSaved);
+          localStorage.setItem('savedArticles', JSON.stringify(newSaved));
         }
-        if (Array.isArray(importedData.archivedArticles)) {
-          setLSMerged('archivedArticles', importedData.archivedArticles);
-        }
-        if (Array.isArray(importedData.deletedArticles)) {
-          const existingDeleted = JSON.parse(localStorage.getItem('deletedArticles') || '[]');
-          const mergedDel = Array.from(new Set([...existingDeleted, ...importedData.deletedArticles]));
-          localStorage.setItem('deletedArticles', JSON.stringify(mergedDel));
-        }
-
         alert(`✅ Imported ${newArticles.length} articles!`);
       } catch (error) {
         alert('❌ Error: ' + error.message);
@@ -552,19 +392,19 @@ const App = () => {
     if (!title || !title.trim()) return;
     const summary = prompt('Enter summary (optional):') || 'No description';
     const newArticle = {
-      id: url,
-      title,
-      source: 'Manual Addition',
+      id: url, 
+      title: title, 
+      source: 'Manual Addition', 
       sourceLogo: '📌',
-      category: categorizeArticle(title, summary, 'Manual'),
-      date: new Date(),
+      category: categorizeArticle(title, summary, 'Manual'), 
+      date: new Date(), 
       readTime: 5,
-      summary,
-      url,
-      trending: false,
+      summary: summary, 
+      url: url, 
+      trending: false, 
       keywords: extractKeywords(title + ' ' + summary),
-      priority: 1,
-      archived: false,
+      priority: 1, 
+      archived: false, 
       manual: true
     };
     setArticles(prev => [newArticle, ...prev]);
@@ -574,43 +414,26 @@ const App = () => {
     alert('✅ Article added!');
   };
 
-  /* ======================================================
-     Archive/restore — keep cachedArticles in sync (local)
-     ====================================================== */
   const archiveArticle = (articleId) => {
-    setArticles(prev => {
-      const next = prev.map(a => a.id === articleId ? { ...a, archived: true } : a);
-      localStorage.setItem('cachedArticles', JSON.stringify(next));
-      return next;
-    });
-
-    const ls = JSON.parse(localStorage.getItem('archivedArticles') || '[]');
-    const current = articles.find(a => a.id === articleId);
-    if (current && !ls.find(a => a.id === articleId)) {
-      const updated = [...ls, { ...current, archived: true }];
-      localStorage.setItem('archivedArticles', JSON.stringify(updated));
+    setArticles(prev => prev.map(article => article.id === articleId ? { ...article, archived: true } : article));
+    const archivedArticles = JSON.parse(localStorage.getItem('archivedArticles') || '[]');
+    const articleToArchive = articles.find(a => a.id === articleId);
+    if (articleToArchive && !archivedArticles.find(a => a.id === articleId)) {
+      archivedArticles.push({ ...articleToArchive, archived: true });
+      localStorage.setItem('archivedArticles', JSON.stringify(archivedArticles));
     }
   };
 
   const restoreArticle = (articleId) => {
-    setArticles(prev => {
-      const next = prev.map(a => a.id === articleId ? { ...a, archived: false } : a);
-      localStorage.setItem('cachedArticles', JSON.stringify(next));
-      return next;
-    });
-
-    const ls = JSON.parse(localStorage.getItem('archivedArticles') || '[]');
-    const updated = ls.filter(a => a.id !== articleId);
-    localStorage.setItem('archivedArticles', JSON.stringify(updated));
+    setArticles(prev => prev.map(article => article.id === articleId ? { ...article, archived: false } : article));
+    const archivedArticles = JSON.parse(localStorage.getItem('archivedArticles') || '[]');
+    const updatedArchived = archivedArticles.filter(a => a.id !== articleId);
+    localStorage.setItem('archivedArticles', JSON.stringify(updatedArchived));
   };
 
   const deleteArticle = (articleId) => {
     if (!confirm('Delete this article permanently?')) return;
-    setArticles(prev => {
-      const next = prev.filter(article => article.id !== articleId);
-      localStorage.setItem('cachedArticles', JSON.stringify(next));
-      return next;
-    });
+    setArticles(prev => prev.filter(article => article.id !== articleId));
     if (savedArticles.includes(articleId)) {
       const newSaved = savedArticles.filter(id => id !== articleId);
       setSavedArticles(newSaved);
@@ -621,11 +444,8 @@ const App = () => {
       deletedArticles.push(articleId);
       localStorage.setItem('deletedArticles', JSON.stringify(deletedArticles));
     }
-    const lsArch = JSON.parse(localStorage.getItem('archivedArticles') || '[]').filter(a => a.id !== articleId);
-    localStorage.setItem('archivedArticles', JSON.stringify(lsArch));
   };
 
-  // Main loader (RSS + overlay)
   useEffect(() => {
     const fetchArticles = async () => {
       setLoading(true);
@@ -638,33 +458,33 @@ const App = () => {
             const parsedFeeds = JSON.parse(savedFeeds);
             feedsToFetch = parsedFeeds.filter(f => f.enabled);
             setCustomFeeds(parsedFeeds);
-          } catch {}
+          } catch (e) {
+            console.error('Error loading custom feeds:', e);
+          }
         }
-
+        
         const cachedArticles = JSON.parse(localStorage.getItem('cachedArticles') || '[]');
-        const deletedArticlesLS = JSON.parse(localStorage.getItem('deletedArticles') || '[]');
+        const deletedArticles = JSON.parse(localStorage.getItem('deletedArticles') || '[]');
         if (cachedArticles.length > 0) {
-          const validCached = cachedArticles
-            .filter(a => !deletedArticlesLS.includes(a.id))
-            .map(a => ({ ...a, date: new Date(a.date) }));
+          const validCached = cachedArticles.filter(a => !deletedArticles.includes(a.id));
           setArticles(validCached);
           setLoading(false);
         }
-
-        const archivedArticlesLS = reviveDates(JSON.parse(localStorage.getItem('archivedArticles') || '[]'));
-        const manualArticles = reviveDates(JSON.parse(localStorage.getItem('manualArticles') || '[]'));
+        const archivedArticles = JSON.parse(localStorage.getItem('archivedArticles') || '[]');
+        const manualArticles = JSON.parse(localStorage.getItem('manualArticles') || '[]');
         const allArticles = [];
         const newFeedStatus = {};
-
+        
         for (const feed of feedsToFetch) {
           try {
-            const items = await fetchFeedItems(feed.url);
-            if (!items.length) {
-              newFeedStatus[feed.source] = { status: 'failed', count: 0, totalFetched: 0 };
+            const response = await fetch('https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(feed.url) + '&api_key=q1ihf2w1uk1uwljssn3dngzhms9ajhqjpzfpqgf4&count=50');
+            if (!response.ok) {
+              newFeedStatus[feed.source] = { status: 'failed', count: 0 };
               continue;
             }
-            const processedArticles = items
-              .filter(item => {
+            const data = await response.json();
+            if (data.status === 'ok' && data.items) {
+              const processedArticles = data.items.filter(item => {
                 const title = item.title || '';
                 const description = item.description || '';
                 const text = (title + ' ' + description).toLowerCase();
@@ -674,58 +494,55 @@ const App = () => {
                 if (hasRendering) return true;
                 if (feed.requireBoth) return hasAI && hasArch;
                 return hasAI || hasArch;
-              })
-              .map(item => {
+              }).map((item) => {
                 const title = item.title || 'Untitled';
                 const description = item.description || '';
                 const cleanDescription = description.replace(/<[^>]*>/g, '').substring(0, 200);
                 const stableId = item.link || item.guid || (feed.source + '-' + title.replace(/\W/g, '').substring(0, 30));
-                if (deletedArticlesLS.includes(stableId)) return null;
+                if (deletedArticles.includes(stableId)) return null;
                 return {
-                  id: stableId,
-                  title,
-                  source: feed.source,
+                  id: stableId, 
+                  title: title, 
+                  source: feed.source, 
                   sourceLogo: feed.logo,
                   category: categorizeArticle(title, description, feed.category),
-                  date: new Date(item.pubDate || Date.now()),
+                  date: new Date(item.pubDate || Date.now()), 
                   readTime: 5,
-                  summary: cleanDescription + '...',
-                  url: item.link || '#',
+                  summary: cleanDescription + '...', 
+                  url: item.link || '#', 
                   trending: Math.random() > 0.75,
                   keywords: extractKeywords(title + ' ' + description),
-                  priority: feed.priority,
-                  archived: false,
+                  priority: feed.priority, 
+                  archived: false, 
                   manual: false
                 };
-              })
-              .filter(Boolean);
-
-            allArticles.push(...processedArticles);
-            newFeedStatus[feed.source] = { status: 'success', count: processedArticles.length, totalFetched: items.length };
+              }).filter(item => item !== null);
+              allArticles.push(...processedArticles);
+              newFeedStatus[feed.source] = { status: 'success', count: processedArticles.length, totalFetched: data.items.length };
+            }
           } catch (feedError) {
             console.error('Feed error:', feedError);
-            newFeedStatus[feed.source] = { status: 'error', count: 0, totalFetched: 0 };
+            newFeedStatus[feed.source] = { status: 'error', count: 0 };
           }
         }
-
+        
         setFeedStatus(newFeedStatus);
-
-        // Final de-duped list with archive overlay
-        const combined = overlayArticles(
-          [
-            ...allArticles.filter(a => a && !deletedArticlesLS.includes(a.id)),
-            ...manualArticles.filter(a => a && !deletedArticlesLS.includes(a.id))
-          ],
-          archivedArticlesLS
-        ).sort((a, b) => {
+        allArticles.push(...manualArticles.filter(a => !deletedArticles.includes(a.id)));
+        const combinedArticles = [...allArticles];
+        const newArticleIds = new Set(allArticles.map(a => a.id));
+        archivedArticles.forEach(archived => {
+          if (!newArticleIds.has(archived.id) && !deletedArticles.includes(archived.id)) {
+            combinedArticles.push({ ...archived, archived: true });
+          }
+        });
+        combinedArticles.sort((a, b) => {
           if (a.archived !== b.archived) return a.archived ? 1 : -1;
           if (a.priority !== b.priority) return a.priority - b.priority;
           return b.date - a.date;
         });
-
-        setArticles(combined);
-        localStorage.setItem('cachedArticles', JSON.stringify(combined));
-        if (combined.length === 0) setError('No articles found. Try refreshing.');
+        setArticles(combinedArticles);
+        localStorage.setItem('cachedArticles', JSON.stringify(combinedArticles));
+        if (combinedArticles.length === 0) setError('No articles found. Try refreshing.');
       } catch (err) {
         console.error('Fetch error:', err);
         setError('Failed to load articles');
@@ -733,7 +550,6 @@ const App = () => {
         setLoading(false);
       }
     };
-
     fetchArticles();
     const interval = setInterval(fetchArticles, 30 * 60 * 1000);
     return () => clearInterval(interval);
@@ -742,16 +558,24 @@ const App = () => {
   useEffect(() => {
     const saved = localStorage.getItem('savedArticles');
     if (saved) {
-      try { setSavedArticles(JSON.parse(saved)); } catch {}
+      try {
+        setSavedArticles(JSON.parse(saved));
+      } catch (e) {
+        console.error('Error loading saved articles:', e);
+      }
     }
   }, []);
 
   const categories = ['all', ...new Set(articles.map(a => a.category).filter(Boolean))].sort();
   const getActiveCategoriesForTab = () => {
     let relevantArticles = [];
-    if (activeTab === 'saved') relevantArticles = articles.filter(a => savedArticles.includes(a.id));
-    else if (activeTab === 'archive') relevantArticles = articles.filter(a => a.archived);
-    else relevantArticles = articles.filter(a => !a.archived);
+    if (activeTab === 'saved') {
+      relevantArticles = articles.filter(a => savedArticles.includes(a.id));
+    } else if (activeTab === 'archive') {
+      relevantArticles = articles.filter(a => a.archived);
+    } else {
+      relevantArticles = articles.filter(a => !a.archived);
+    }
     const cats = new Set(relevantArticles.map(a => a.category).filter(Boolean));
     return ['all', ...Array.from(cats)].sort();
   };
@@ -770,9 +594,9 @@ const App = () => {
   };
 
   const chartData = getCategoryData();
-  const archivedArticlesList = articles.filter(a => a.archived);
+  const archivedArticles = articles.filter(a => a.archived);
   const archiveCategoryCount = {};
-  archivedArticlesList.forEach(article => {
+  archivedArticles.forEach(article => {
     if (article.category) archiveCategoryCount[article.category] = (archiveCategoryCount[article.category] || 0) + 1;
   });
   const archiveChartData = Object.entries(archiveCategoryCount).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
@@ -789,26 +613,19 @@ const App = () => {
   };
 
   const toggleSave = (articleId) => {
-    const newSavedArticles = savedArticles.includes(articleId)
-      ? savedArticles.filter(id => id !== articleId)
-      : [...savedArticles, articleId];
+    const newSavedArticles = savedArticles.includes(articleId) ? savedArticles.filter(id => id !== articleId) : [...savedArticles, articleId];
     setSavedArticles(newSavedArticles);
     localStorage.setItem('savedArticles', JSON.stringify(newSavedArticles));
   };
 
-  const displayArticles = activeTab === 'saved'
-    ? articles.filter(article => savedArticles.includes(article.id))
-    : activeTab === 'archive'
-      ? articles.filter(article => article.archived)
-      : articles.filter(article => !article.archived);
+  const displayArticles = activeTab === 'saved' ? articles.filter(article => savedArticles.includes(article.id)) : activeTab === 'archive' ? articles.filter(article => article.archived) : articles.filter(article => !article.archived);
 
   const filteredArticles = displayArticles.filter(article => {
-    const matchesSearch =
-      article.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      article.summary.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = article.title.toLowerCase().includes(searchQuery.toLowerCase()) || article.summary.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = selectedCategory === 'all' || article.category === selectedCategory;
     const matchesSource = selectedSource === 'all' || article.source === selectedSource;
-
+    
+    // Check if article is from today
     const isNewToday = (() => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -816,17 +633,18 @@ const App = () => {
       articleDate.setHours(0, 0, 0, 0);
       return articleDate.getTime() === today.getTime();
     })();
-
+    
     const matchesNewToday = !showOnlyNewToday || isNewToday;
-
+    
     return matchesSearch && matchesCategory && matchesSource && matchesNewToday;
   }).sort((a, b) => {
     if (activeTab === 'archive') return b.date - a.date;
-    return sortBy === 'date' ? b.date - a.date : (b.trending ? 1 : 0) - (a.trending ? 1 : 0);
+    return sortBy === 'date' ? b.date - a.date : b.trending - a.trending;
   });
 
   const trendingCount = articles.filter(a => a.trending && !a.archived).length;
-
+  
+  // Count articles added today
   const getArticlesAddedToday = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -881,7 +699,7 @@ const App = () => {
                 <X className="w-5 h-5 sm:w-6 sm:h-6" />
               </button>
             </div>
-
+            
             <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row gap-2 sm:gap-3">
               <button onClick={addFeed} className="px-4 sm:px-6 py-2 sm:py-3 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-600 hover:to-emerald-600 transition-all hover:scale-105 shadow-lg text-sm sm:text-base">+ Add Feed</button>
               <button onClick={resetFeeds} className={'px-4 sm:px-6 py-2 sm:py-3 rounded-full transition-all hover:scale-105 text-sm sm:text-base ' + (darkMode ? 'bg-orange-500/10 text-orange-400 hover:bg-orange-500/20' : 'bg-orange-50 text-orange-700')}>Reset</button>
@@ -953,31 +771,20 @@ const App = () => {
         <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8">
           {/* Top Bar */}
           <div className="flex items-center justify-between py-2 sm:py-4">
-            <div className="flex items-center gap-1.5 sm:gap-2">
-              {/* Day/Night toggle */}
-              <button onClick={() => setDarkMode(!darkMode)} className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800' : 'bg-gray-100 hover:bg-gray-200')}>
-                {darkMode ? <Sun className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400" /> : <Moon className="w-4 h-4 sm:w-5 sm:h-5" />}
-              </button>
-              {/* New: Reload button (distinct icon; page reload only) */}
-              <button
-                onClick={() => window.location.reload()}
-                className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-700')}
-                title="Reload page"
-              >
-                <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5" />
-              </button>
-            </div>
-
+            <button onClick={() => setDarkMode(!darkMode)} className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800' : 'bg-gray-100 hover:bg-gray-200')}>
+              {darkMode ? <Sun className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400" /> : <Moon className="w-4 h-4 sm:w-5 sm:h-5" />}
+            </button>
+            
             <div className="flex items-center gap-1 sm:gap-2">
               <button onClick={sendFeedback} className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-purple-400' : 'bg-gray-100 hover:bg-gray-200 text-purple-600')} title="Email Feedback">
                 <Mail className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
-
+              
               <button onClick={() => setShowGistSettings(true)} className={'p-1.5 sm:p-2.5 rounded-full relative transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800' : 'bg-gray-100 hover:bg-gray-200') + ' ' + (gistStatus === 'connected' ? 'text-green-400' : 'text-gray-400')}>
                 {gistStatus === 'connected' ? <Cloud className="w-4 h-4 sm:w-5 sm:h-5" /> : <CloudOff className="w-4 h-4 sm:w-5 sm:h-5" />}
                 {gistStatus === 'syncing' && <span className="absolute top-0 right-0 w-1.5 h-1.5 sm:w-2 sm:h-2 bg-blue-500 rounded-full animate-ping"></span>}
               </button>
-
+              
               <div className="relative">
                 <button onClick={() => setShowExportMenu(!showExportMenu)} className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-purple-400' : 'bg-gray-100 hover:bg-gray-200 text-purple-600')}>
                   <Database className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -1002,8 +809,8 @@ const App = () => {
                       <Upload className="w-3 h-3 sm:w-4 sm:h-4" />
                       <span className="text-xs sm:text-sm">Import from File</span>
                     </button>
-                    {(gistId || DEFAULT_PUBLIC_GIST_ID) && (
-                      <button onClick={() => { loadFromGist(); setShowExportMenu(false); }} className={'w-full flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-left transition-all hover:scale-[1.02] ' + (darkMode ? 'hover:bg-gray-800 text-gray-300' : 'bg-white hover:bg-gray-100')}>
+                    {gistId && (
+                      <button onClick={() => { loadFromGist(); setShowExportMenu(false); }} className={'w-full flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-left transition-all hover:scale-[1.02] ' + (darkMode ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100')}>
                         <Cloud className="w-3 h-3 sm:w-4 sm:h-4" />
                         <span className="text-xs sm:text-sm">Load from GitHub</span>
                       </button>
@@ -1011,31 +818,24 @@ const App = () => {
                   </div>
                 )}
               </div>
-
-              {/* Only one Sync button (blue) — pulls from GitHub */}
-              <button
-                onClick={loadFromGist}
-                className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-blue-400' : 'bg-gray-100 hover:bg-gray-200 text-blue-600')}
-                title="Sync from GitHub"
-              >
-                <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5" />
-              </button>
-
+              
+              {/* Removed the explicit page reload button to keep state stable */}
+              
               <button onClick={() => setShowChart(!showChart)} className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-blue-400' : 'bg-gray-100 hover:bg-gray-200 text-blue-600')}>
                 <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
-
+              
               <button onClick={() => setShowFeedStatus(!showFeedStatus)} className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-cyan-400' : 'bg-gray-100 hover:bg-gray-200 text-cyan-600')}>
                 <Settings className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
-
+              
               <button onClick={handleOpenFeedManager} className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-purple-400' : 'bg-gray-100 hover:bg-gray-200 text-purple-600')}>
                 <Filter className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
             </div>
           </div>
 
-          {/* Hero */}
+          {/* Hero Section with Gradient */}
           <div className="text-center py-6 sm:py-12">
             <div className="relative inline-block">
               <h1 className={'text-3xl sm:text-5xl md:text-7xl font-bold mb-2 sm:mb-4 tracking-tight bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 bg-clip-text text-transparent animate-gradient'}>
@@ -1079,7 +879,7 @@ const App = () => {
             </div>
           </div>
 
-          {/* Tabs */}
+          {/* Tabs with Gradient Active State */}
           <div className="flex gap-1.5 sm:gap-2 mb-4 sm:mb-6 overflow-x-auto pb-2">
             <button onClick={() => { setActiveTab('all'); setShowOnlyNewToday(false); }} className={'px-3 sm:px-6 py-1.5 sm:py-2.5 rounded-full font-medium transition-all hover:scale-105 text-xs sm:text-base whitespace-nowrap ' + (activeTab === 'all' ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg' : (darkMode ? 'bg-gray-900 text-gray-400 hover:bg-gray-800' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'))}>
               Recent ({articles.filter(a => !a.archived).length})
@@ -1090,11 +890,11 @@ const App = () => {
             </button>
             <button onClick={() => { setActiveTab('archive'); setShowOnlyNewToday(false); }} className={'px-3 sm:px-6 py-1.5 sm:py-2.5 rounded-full font-medium flex items-center gap-1 sm:gap-2 transition-all hover:scale-105 whitespace-nowrap text-xs sm:text-base ' + (activeTab === 'archive' ? 'bg-gradient-to-r from-orange-500 to-yellow-500 text-white shadow-lg' : (darkMode ? 'bg-gray-900 text-gray-400 hover:bg-gray-800' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'))}>
               <Archive className="w-3 h-3 sm:w-4 sm:h-4" />
-              Archive ({archivedArticlesList.length})
+              Archive ({archivedArticles.length})
             </button>
           </div>
 
-          {/* Search */}
+          {/* Search with Gradient Border */}
           <div className="relative mb-4 sm:mb-6">
             <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full opacity-20 blur-sm"></div>
             <div className="relative">
@@ -1106,7 +906,7 @@ const App = () => {
             </div>
           </div>
 
-          {/* Category Pills */}
+          {/* Category Pills with Hover Effects */}
           <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-4 sm:pb-6">
             <button onClick={() => setShowFilters(!showFilters)} className={'flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-full transition-all hover:scale-105 text-xs sm:text-sm whitespace-nowrap ' + (darkMode ? 'bg-gray-900 text-gray-400 hover:bg-gray-800' : 'bg-gray-100 hover:bg-gray-200')}>
               <Filter className="w-3 h-3 sm:w-4 sm:h-4" />Filters
@@ -1237,7 +1037,7 @@ const App = () => {
           </div>
         )}
 
-        {/* Articles */}
+        {/* Articles - Mobile optimized cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5">
           {filteredArticles.map(article => (
             <article key={article.id} className={'group rounded-2xl sm:rounded-3xl p-3 sm:p-5 border transition-all hover:shadow-2xl hover:-translate-y-1 ' + (darkMode ? 'bg-gradient-to-br from-gray-900 to-gray-800 border-gray-800 hover:border-gray-700' : 'bg-white border-gray-200 hover:border-gray-300')}>
@@ -1250,7 +1050,7 @@ const App = () => {
                   <Bookmark className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill={savedArticles.includes(article.id) ? 'currentColor' : 'none'} />
                 </button>
               </div>
-
+              
               {(article.archived || article.manual) && (
                 <div className="flex gap-1.5 sm:gap-2 mb-2 sm:mb-3">
                   {article.archived && (
@@ -1266,21 +1066,21 @@ const App = () => {
                   )}
                 </div>
               )}
-
+              
               <h2 className={'text-sm sm:text-base font-bold mb-2 sm:mb-3 line-clamp-2 group-hover:bg-gradient-to-r group-hover:from-blue-500 group-hover:to-purple-500 group-hover:bg-clip-text group-hover:text-transparent transition-all ' + (darkMode ? 'text-white' : 'text-gray-900')}>{article.title}</h2>
               <p className={'text-xs mb-2 sm:mb-3 line-clamp-2 ' + (darkMode ? 'text-gray-500' : 'text-gray-600')}>{article.summary}</p>
-
-              {article.keywords?.length > 0 && (
+              
+              {article.keywords.length > 0 && (
                 <div className="flex flex-wrap gap-1 sm:gap-1.5 mb-2 sm:mb-3">
                   {article.keywords.slice(0, 3).map((kw, i) => <span key={i} className={'px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-xs transition-all hover:scale-105 ' + (darkMode ? 'bg-gray-800 text-gray-400 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200')}>{kw}</span>)}
                 </div>
               )}
-
+              
               <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-3 sm:mb-4">
                 <span className={'px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-xs transition-all ' + (darkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-700')}>{article.category}</span>
                 {article.trending && <span className={'px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-xs flex items-center gap-1 animate-pulse ' + (darkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-700')}><TrendingUp className="w-2.5 h-2.5 sm:w-3 sm:h-3" />Hot</span>}
               </div>
-
+              
               <div className={'flex items-center justify-between gap-2 mb-3 sm:mb-4 pb-3 sm:pb-4 border-b ' + (darkMode ? 'border-gray-800' : 'border-gray-200')}>
                 {!article.archived ? (
                   <button onClick={() => archiveArticle(article.id)} className={'flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs transition-all hover:scale-105 ' + (darkMode ? 'bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20' : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100')}>
@@ -1323,14 +1123,30 @@ const App = () => {
         )}
       </main>
 
-      {/* Animations */}
+      {/* Add CSS for animations */}
       <style>{`
-        @keyframes gradient { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
-        .animate-gradient { background-size: 200% auto; animation: gradient 3s ease infinite; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        .animate-fadeIn { animation: fadeIn 0.2s ease-out; }
-        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        .animate-slideUp { animation: slideUp 0.3s ease-out; }
+        @keyframes gradient {
+          0%, 100% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+        }
+        .animate-gradient {
+          background-size: 200% auto;
+          animation: gradient 3s ease infinite;
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.2s ease-out;
+        }
+        @keyframes slideUp {
+          from { transform: translateY(20px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+        .animate-slideUp {
+          animation: slideUp 0.3s ease-out;
+        }
       `}</style>
     </div>
   );
