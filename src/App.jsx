@@ -1180,7 +1180,7 @@ const App = () => {
           </div>
         )}
 
-        {activeTab === 'archive' && archivedArticles.length === 0 && (
+        {activeTab === 'archive' && archivedArticlesList.length === 0 && (
           <div className={'text-center py-16 sm:py-24 ' + (darkMode ? 'text-gray-500' : 'text-gray-400')}>
             <Archive className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-4 sm:mb-6 opacity-30" />
             <p className="text-lg sm:text-2xl font-light">No archived articles</p>
