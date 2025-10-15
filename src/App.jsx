@@ -1,9 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Filter, Bookmark, TrendingUp, Clock, ExternalLink, Moon, Sun, Building2, BarChart3, Calendar, Sparkles, RefreshCw, AlertCircle, Heart, Archive, ArchiveRestore, Trash2, Download, Upload, Database, Cloud, CloudOff, Settings, X, Mail } from 'lucide-react';
+import {
+  Search, Filter, Bookmark, TrendingUp, Clock, ExternalLink, Moon, Sun, Building2,
+  BarChart3, Calendar, Sparkles, RefreshCw, AlertCircle, Heart, Archive, ArchiveRestore,
+  Trash2, Download, Upload, Database, Cloud, CloudOff, Settings, X, Mail
+} from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 /* =========================
-   Public Gist seed fallback
+   Constants / helpers
    ========================= */
 const DEFAULT_PUBLIC_GIST_ID = 'e89e6b358e664cc9bbe2ed4bd0233638';
 const GIST_FILENAME = 'ai-architecture-articles.json';
@@ -11,6 +15,27 @@ const GIST_FILENAME = 'ai-architecture-articles.json';
 const reviveDates = (list = []) =>
   list.map(a => ({ ...a, date: a?.date ? new Date(a.date) : new Date() }));
 
+// Merge two arrays of article objects by id, prefer left-most item
+function mergeById(primary = [], secondary = []) {
+  const map = new Map();
+  [...secondary, ...primary].forEach(a => { if (a && a.id) map.set(a.id, a); });
+  return Array.from(map.values());
+}
+
+// Safe-set localStorage only if incoming has items; otherwise preserve existing
+function setLSMerged(key, incomingList = []) {
+  const existing = JSON.parse(localStorage.getItem(key) || '[]');
+  const revivedExisting = reviveDates(existing);
+  const revivedIncoming = reviveDates(incomingList);
+  const merged = incomingList.length ? mergeById(revivedIncoming, revivedExisting) : revivedExisting;
+  localStorage.setItem(key, JSON.stringify(merged));
+  return merged;
+}
+
+/* =========================
+   Public Gist seed fallback
+   (non-destructive merges)
+   ========================= */
 async function tryLoadPublicGist(gistId = DEFAULT_PUBLIC_GIST_ID) {
   try {
     const metaRes = await fetch(`https://api.github.com/gists/${gistId}`);
@@ -23,22 +48,40 @@ async function tryLoadPublicGist(gistId = DEFAULT_PUBLIC_GIST_ID) {
     if (!rawRes.ok) return null;
     const data = await rawRes.json();
 
-    const importedArticles = reviveDates(data.articles || []);
-    const importedSaved = data.savedArticles || [];
-    const importedArchived = reviveDates(data.archivedArticles || []);
-    const importedDeleted = data.deletedArticles || [];
+    const importedArticles  = reviveDates(data.articles || []);
+    const importedSaved     = data.savedArticles || [];
+    const importedArchived  = reviveDates(data.archivedArticles || []);
+    const importedDeleted   = data.deletedArticles || [];
 
-    // Persist so subsequent visits are instant
+    // Persist but DO NOT wipe if arrays are empty
     localStorage.setItem('cachedArticles', JSON.stringify(importedArticles));
-    localStorage.setItem('savedArticles', JSON.stringify(importedSaved));
-    localStorage.setItem('archivedArticles', JSON.stringify(importedArchived));
-    localStorage.setItem('deletedArticles', JSON.stringify(importedDeleted));
+
+    const existingSaved = JSON.parse(localStorage.getItem('savedArticles') || '[]');
+    const mergedSaved = importedSaved.length
+      ? Array.from(new Set([...existingSaved, ...importedSaved]))
+      : existingSaved;
+    localStorage.setItem('savedArticles', JSON.stringify(mergedSaved));
+
+    const mergedArchived = setLSMerged('archivedArticles', importedArchived);
+
+    const existingDeleted = JSON.parse(localStorage.getItem('deletedArticles') || '[]');
+    const mergedDeleted = importedDeleted.length
+      ? Array.from(new Set([...existingDeleted, ...importedDeleted]))
+      : existingDeleted;
+    localStorage.setItem('deletedArticles', JSON.stringify(mergedDeleted));
+
+    // Return a combined list that includes archived (so UI can render them immediately)
+    const combinedForView = [
+      ...importedArticles,
+      ...mergedArchived.filter(a => a && a.id).map(a => ({ ...a, archived: true }))
+    ];
 
     return {
+      articlesForView: combinedForView,
       articles: importedArticles,
-      savedArticles: importedSaved,
-      archivedArticles: importedArchived,
-      deletedArticles: importedDeleted
+      savedArticles: mergedSaved,
+      archivedArticles: mergedArchived,
+      deletedArticles: mergedDeleted
     };
   } catch {
     return null;
@@ -126,6 +169,7 @@ const App = () => {
     window.location.href = `mailto:architek.eth@gmail.com?subject=${subject}&body=${body}`;
   };
 
+  // Basic settings load
   useEffect(() => {
     const savedToken = localStorage.getItem('githubGistToken');
     const savedGistId = localStorage.getItem('githubGistId');
@@ -151,9 +195,7 @@ const App = () => {
       try {
         const response = await fetch('https://api.countapi.xyz/hit/ai-architecture-news/visits');
         const data = await response.json();
-        if (data.value) {
-          setViewCount(data.value);
-        }
+        if (data.value) setViewCount(data.value);
       } catch (err) {
         const sessionViews = parseInt(localStorage.getItem('sessionViews') || '0') + 1;
         localStorage.setItem('sessionViews', sessionViews.toString());
@@ -162,6 +204,18 @@ const App = () => {
     };
 
     fetchViewCount();
+  }, []);
+
+  // One-time migration guard: restore archived from cached if local archived is empty
+  useEffect(() => {
+    const archivedLS = JSON.parse(localStorage.getItem('archivedArticles') || '[]');
+    if (!archivedLS.length) {
+      const cached = JSON.parse(localStorage.getItem('cachedArticles') || '[]');
+      const archivedFromCache = reviveDates(cached).filter(a => a.archived);
+      if (archivedFromCache.length) {
+        localStorage.setItem('archivedArticles', JSON.stringify(archivedFromCache));
+      }
+    }
   }, []);
 
   const handleOpenFeedManager = () => setShowFeedManager(true);
@@ -219,16 +273,22 @@ const App = () => {
     }
   };
 
+  // Sync to Gist (uses union of archived)
   const syncToGist = async () => {
     if (!gistToken) return;
     try {
       setGistStatus('syncing');
+
+      const localArchived = reviveDates(JSON.parse(localStorage.getItem('archivedArticles') || '[]'));
+      const stateArchived = articles.filter(a => a.archived);
+      const archivedUnion = mergeById(stateArchived, localArchived);
+
       const data = {
         exportDate: new Date().toISOString(),
         version: '1.0',
         articles,
         savedArticles,
-        archivedArticles: articles.filter(a => a.archived),
+        archivedArticles: archivedUnion,
         deletedArticles: JSON.parse(localStorage.getItem('deletedArticles') || '[]')
       };
       const gistData = {
@@ -236,6 +296,7 @@ const App = () => {
         public: true, // ensure readable without token
         files: { [GIST_FILENAME]: { content: JSON.stringify(data, null, 2) } }
       };
+
       let response;
       if (gistId) {
         response = await fetch(`https://api.github.com/gists/${gistId}`, {
@@ -269,16 +330,22 @@ const App = () => {
       const timer = setTimeout(() => { syncToGist(); }, 3000);
       return () => clearTimeout(timer);
     }
-  }, [articles, savedArticles, gistToken, loading]); // include loading
+  }, [articles, savedArticles, gistToken, loading]);
 
+  // Load from Gist (public-first, merge archives)
   const loadFromGist = async () => {
     const gid = (gistId || DEFAULT_PUBLIC_GIST_ID).trim();
 
     // Try public first
     const publicData = await tryLoadPublicGist(gid);
     if (publicData) {
+      const mergedArchived = setLSMerged('archivedArticles', publicData.archivedArticles || []);
+      const combined = [
+        ...(publicData.articles || []),
+        ...mergedArchived.map(a => ({ ...a, archived: true }))
+      ];
       setSavedArticles(publicData.savedArticles || []);
-      setArticles(publicData.articles || []);
+      setArticles(combined);
       setGistStatus('connected');
       setGistError('');
       alert('✅ Loaded from public GitHub Gist!');
@@ -306,15 +373,26 @@ const App = () => {
       const data = JSON.parse(fileContent);
 
       const importedArticles = reviveDates(data.articles || []);
-      const importedSaved = data.savedArticles || [];
+      const importedSaved    = data.savedArticles || [];
       const importedArchived = reviveDates(data.archivedArticles || []);
-      const importedDeleted = data.deletedArticles || [];
+      const importedDeleted  = data.deletedArticles || [];
 
-      setSavedArticles(importedSaved);
-      localStorage.setItem('savedArticles', JSON.stringify(importedSaved));
-      localStorage.setItem('archivedArticles', JSON.stringify(importedArchived));
-      localStorage.setItem('deletedArticles', JSON.stringify(importedDeleted));
+      const mergedArchived = setLSMerged('archivedArticles', importedArchived);
+      const existingDeleted = JSON.parse(localStorage.getItem('deletedArticles') || '[]');
+      const mergedDeleted = importedDeleted.length
+        ? Array.from(new Set([...existingDeleted, ...importedDeleted]))
+        : existingDeleted;
+
+      const mergedSaved = Array.from(new Set([...(JSON.parse(localStorage.getItem('savedArticles') || '[]')), ...importedSaved]));
+      setSavedArticles(mergedSaved);
+
+      localStorage.setItem('deletedArticles', JSON.stringify(mergedDeleted));
       localStorage.setItem('cachedArticles', JSON.stringify(importedArticles));
+
+      setArticles([
+        ...importedArticles,
+        ...mergedArchived.map(a => ({ ...a, archived: true }))
+      ]);
 
       setGistStatus('connected');
       setGistError('');
@@ -401,12 +479,17 @@ const App = () => {
   };
 
   const exportData = (type = 'all') => {
+    // Use union for archived in export as well
+    const localArchived = reviveDates(JSON.parse(localStorage.getItem('archivedArticles') || '[]'));
+    const stateArchived = articles.filter(a => a.archived);
+    const archivedUnion = mergeById(stateArchived, localArchived);
+
     const exportData = {
       exportDate: new Date().toISOString(),
       version: '1.0',
       articles,
       savedArticles,
-      archivedArticles: articles.filter(a => a.archived)
+      archivedArticles: archivedUnion
     };
     let dataToExport, filename;
     switch (type) {
@@ -448,11 +531,22 @@ const App = () => {
         const existingIds = new Set(articles.map(a => a.id));
         const newArticles = reviveDates(importedData.articles).filter(a => !existingIds.has(a.id));
         setArticles(prev => [...prev, ...newArticles]);
-        if (importedData.savedArticles) {
-          const newSaved = [...new Set([...savedArticles, ...importedData.savedArticles])];
-          setSavedArticles(newSaved);
-          localStorage.setItem('savedArticles', JSON.stringify(newSaved));
+
+        // Merge saved/archived/deleted too
+        if (Array.isArray(importedData.savedArticles)) {
+          const mergedSaved = Array.from(new Set([...(JSON.parse(localStorage.getItem('savedArticles') || '[]')), ...importedData.savedArticles]));
+          setSavedArticles(mergedSaved);
+          localStorage.setItem('savedArticles', JSON.stringify(mergedSaved));
         }
+        if (Array.isArray(importedData.archivedArticles)) {
+          setLSMerged('archivedArticles', importedData.archivedArticles);
+        }
+        if (Array.isArray(importedData.deletedArticles)) {
+          const existingDeleted = JSON.parse(localStorage.getItem('deletedArticles') || '[]');
+          const mergedDel = Array.from(new Set([...existingDeleted, ...importedData.deletedArticles]));
+          localStorage.setItem('deletedArticles', JSON.stringify(mergedDel));
+        }
+
         alert(`✅ Imported ${newArticles.length} articles!`);
       } catch (error) {
         alert('❌ Error: ' + error.message);
@@ -523,19 +617,20 @@ const App = () => {
     }
   };
 
+  // Main loader
   useEffect(() => {
     const fetchArticles = async () => {
       setLoading(true);
       setError(null);
       try {
-        // Seed from public Gist if no cache yet
+        // Seed from public gist if nothing cached yet
         const cachedArticlesLS = JSON.parse(localStorage.getItem('cachedArticles') || '[]');
         if (cachedArticlesLS.length === 0) {
           const seeded = await tryLoadPublicGist(
             (localStorage.getItem('githubGistId') || '').trim() || DEFAULT_PUBLIC_GIST_ID
           );
-          if (seeded?.articles?.length) {
-            setArticles(seeded.articles);
+          if (seeded?.articlesForView?.length) {
+            setArticles(seeded.articlesForView); // includes archived for immediate display
             setSavedArticles(seeded.savedArticles || []);
           }
         }
@@ -556,7 +651,9 @@ const App = () => {
         const cachedArticles = JSON.parse(localStorage.getItem('cachedArticles') || '[]');
         const deletedArticles = JSON.parse(localStorage.getItem('deletedArticles') || '[]');
         if (cachedArticles.length > 0) {
-          const validCached = cachedArticles.filter(a => !deletedArticles.includes(a.id)).map(a => ({ ...a, date: new Date(a.date) }));
+          const validCached = cachedArticles
+            .filter(a => !deletedArticles.includes(a.id))
+            .map(a => ({ ...a, date: new Date(a.date) }));
           setArticles(validCached);
           setLoading(false);
         }
@@ -621,7 +718,10 @@ const App = () => {
         setFeedStatus(newFeedStatus);
 
         // include manual articles
-        const combined = [...allArticles, ...manualArticles.filter(a => !deletedArticles.includes(a.id))];
+        const combined = [
+          ...allArticles,
+          ...manualArticles.filter(a => !deletedArticles.includes(a.id))
+        ];
         const newArticleIds = new Set(allArticles.map(a => a.id));
 
         // carry forward archived-only items
@@ -711,15 +811,23 @@ const App = () => {
   };
 
   const toggleSave = (articleId) => {
-    const newSavedArticles = savedArticles.includes(articleId) ? savedArticles.filter(id => id !== articleId) : [...savedArticles, articleId];
+    const newSavedArticles = savedArticles.includes(articleId)
+      ? savedArticles.filter(id => id !== articleId)
+      : [...savedArticles, articleId];
     setSavedArticles(newSavedArticles);
     localStorage.setItem('savedArticles', JSON.stringify(newSavedArticles));
   };
 
-  const displayArticles = activeTab === 'saved' ? articles.filter(article => savedArticles.includes(article.id)) : activeTab === 'archive' ? articles.filter(article => article.archived) : articles.filter(article => !article.archived);
+  const displayArticles = activeTab === 'saved'
+    ? articles.filter(article => savedArticles.includes(article.id))
+    : activeTab === 'archive'
+      ? articles.filter(article => article.archived)
+      : articles.filter(article => !article.archived);
 
   const filteredArticles = displayArticles.filter(article => {
-    const matchesSearch = article.title.toLowerCase().includes(searchQuery.toLowerCase()) || article.summary.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch =
+      article.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      article.summary.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = selectedCategory === 'all' || article.category === selectedCategory;
     const matchesSource = selectedSource === 'all' || article.source === selectedSource;
 
@@ -842,7 +950,7 @@ const App = () => {
 
             <div className="mb-4 sm:mb-5">
               <label className={'block text-xs sm:text-sm mb-2 ' + (darkMode ? 'text-gray-400' : 'text-gray-700')}>GitHub Token</label>
-              <input type="password" value={gistToken} onChange={(e) => setGistToken(e.target.value)} placeholder="ghp_..." className={'W-full w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl sm:rounded-2xl transition-all focus:ring-2 focus:ring-blue-500 text-sm sm:text-base ' + (darkMode ? 'bg-gray-800 text-white border border-gray-700' : 'bg-gray-100')} />
+              <input type="password" value={gistToken} onChange={(e) => setGistToken(e.target.value)} placeholder="ghp_..." className={'w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl sm:rounded-2xl transition-all focus:ring-2 focus:ring-blue-500 text-sm sm:text-base ' + (darkMode ? 'bg-gray-800 text-white border border-gray-700' : 'bg-gray-100')} />
             </div>
 
             <div className="mb-4 sm:mb-6">
@@ -906,7 +1014,7 @@ const App = () => {
                       <span className="text-xs sm:text-sm">Import from File</span>
                     </button>
                     {(gistId || DEFAULT_PUBLIC_GIST_ID) && (
-                      <button onClick={() => { loadFromGist(); setShowExportMenu(false); }} className={'w-full flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-left transition-all hover:scale-[1.02] ' + (darkMode ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100')}>
+                      <button onClick={() => { loadFromGist(); setShowExportMenu(false); }} className={'w-full flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-left transition-all hover:scale-[1.02] ' + (darkMode ? 'hover:bg-gray-800 text-gray-300' : 'bg-white hover:bg-gray-100')}>
                         <Cloud className="w-3 h-3 sm:w-4 sm:h-4" />
                         <span className="text-xs sm:text-sm">Load from GitHub</span>
                       </button>
@@ -1015,7 +1123,7 @@ const App = () => {
                 New Today ({newTodayCount})
               </button>
             )}
-            {getActiveCategoriesForTab().slice(0, 8).map(cat => (
+            {activeCategories.slice(0, 8).map(cat => (
               <button key={cat} onClick={() => setSelectedCategory(cat)} className={'px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-full text-xs sm:text-sm font-medium whitespace-nowrap transition-all hover:scale-105 ' + (selectedCategory === cat ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg' : (darkMode ? 'bg-gray-900 text-gray-400 hover:bg-gray-800' : 'bg-gray-100 hover:bg-gray-200'))}>
                 {cat === 'all' ? 'All' : cat}
               </button>
@@ -1029,7 +1137,10 @@ const App = () => {
                   {categories.map(cat => <option key={cat} value={cat}>{cat === 'all' ? 'All' : cat}</option>)}
                 </select>
                 <select value={selectedSource} onChange={(e) => setSelectedSource(e.target.value)} className={'w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl sm:rounded-2xl transition-all focus:ring-2 focus:ring-purple-500 text-sm sm:text-base ' + (darkMode ? 'bg-gray-800 text-white border border-gray-700' : 'bg-white border border-gray-200')}>
-                  {['all', ...(new Set(articles.map(a => a.source))).values()].map((s, idx) => <option key={`${s}-${idx}`} value={s}>{s === 'all' ? 'All Sources' : s}</option>)}
+                  {sources.map(s => {
+                    if (s === '---') return <option key="separator" disabled>────────────</option>;
+                    return <option key={s} value={s}>{s === 'all' ? 'All Sources' : s}</option>;
+                  })}
                 </select>
                 <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className={'w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl sm:rounded-2xl transition-all focus:ring-2 focus:ring-purple-500 text-sm sm:text-base ' + (darkMode ? 'bg-gray-800 text-white border border-gray-700' : 'bg-white border border-gray-200')}>
                   <option value="date">Latest</option>
@@ -1135,7 +1246,7 @@ const App = () => {
         {/* Articles */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5">
           {filteredArticles.map(article => (
-            <article key={article.id} className={'group rounded-2xl sm:rounded-3xl p-3 sm:5 border transition-all hover:shadow-2xl hover:-translate-y-1 ' + (darkMode ? 'bg-gradient-to-br from-gray-900 to-gray-800 border-gray-800 hover:border-gray-700' : 'bg-white border-gray-200 hover:border-gray-300')}>
+            <article key={article.id} className={'group rounded-2xl sm:rounded-3xl p-3 sm:p-5 border transition-all hover:shadow-2xl hover:-translate-y-1 ' + (darkMode ? 'bg-gradient-to-br from-gray-900 to-gray-800 border-gray-800 hover:border-gray-700' : 'bg-white border-gray-200 hover:border-gray-300')}>
               <div className="flex items-start justify-between mb-2 sm:mb-3">
                 <div className="flex items-center gap-1.5 sm:gap-2">
                   <span className="text-base sm:text-xl">{article.sourceLogo}</span>
@@ -1165,7 +1276,7 @@ const App = () => {
               <h2 className={'text-sm sm:text-base font-bold mb-2 sm:mb-3 line-clamp-2 group-hover:bg-gradient-to-r group-hover:from-blue-500 group-hover:to-purple-500 group-hover:bg-clip-text group-hover:text-transparent transition-all ' + (darkMode ? 'text-white' : 'text-gray-900')}>{article.title}</h2>
               <p className={'text-xs mb-2 sm:mb-3 line-clamp-2 ' + (darkMode ? 'text-gray-500' : 'text-gray-600')}>{article.summary}</p>
 
-              {article.keywords.length > 0 && (
+              {article.keywords?.length > 0 && (
                 <div className="flex flex-wrap gap-1 sm:gap-1.5 mb-2 sm:mb-3">
                   {article.keywords.slice(0, 3).map((kw, i) => <span key={i} className={'px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-xs transition-all hover:scale-105 ' + (darkMode ? 'bg-gray-800 text-gray-400 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200')}>{kw}</span>)}
                 </div>
@@ -1220,10 +1331,7 @@ const App = () => {
 
       {/* Animations */}
       <style>{`
-        @keyframes gradient {
-          0%, 100% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-        }
+        @keyframes gradient { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
         .animate-gradient { background-size: 200% auto; animation: gradient 3s ease infinite; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         .animate-fadeIn { animation: fadeIn 0.2s ease-out; }
