@@ -1,0 +1,34 @@
+name: RSS → Gist sync
+
+on:
+  schedule:
+    # every 30 minutes; bump to hourly if you prefer: "0 * * * *"
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {} # allow manual runs
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (empty)
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install deps
+        run: |
+          npm i rss-parser node-fetch@3
+
+      - name: Run sync
+        env:
+          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}   # classic token with "gist" scope
+          GIST_ID:    ${{ secrets.GIST_ID }}      # e.g. e89e6b358e664cc9bbe2ed4bd0233638
+          GIST_FILE:  ai-architecture-articles.json
+        run: |
+          node scripts/syncFeeds.js
