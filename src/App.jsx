@@ -1031,9 +1031,10 @@ const App = () => {
           {/* Hero */}
           <div className="text-center py-6 sm:py-12">
             <div className="relative inline-block">
-              <h1 className={'text-3xl sm:text-5xl md:text-7xl font-bold mb-2 sm:mb-4 tracking-tight bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 bg-clip-text text-transparent animate-gradient'}>
-                AI in Architecture
-              </h1>
+              <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight text-blue-600">
+              Architecture & AI
+            </h1>
+
               <div className="absolute -inset-2 sm:-inset-4 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 opacity-20 blur-3xl -z-10"></div>
             </div>
             <p className={'text-sm sm:text-lg md:text-xl font-light mb-2 ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
