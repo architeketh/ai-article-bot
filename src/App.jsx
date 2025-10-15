@@ -3,6 +3,10 @@ import { Search, Filter, Bookmark, TrendingUp, Clock, ExternalLink, Moon, Sun, B
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 const App = () => {
+  // HARDCODED GIST CONFIGURATION - Articles will load automatically for everyone
+  const DEFAULT_GIST_ID = 'e89e6b358e664cc9bbe2ed4bd0233638';
+  const DEFAULT_GIST_USER = 'architeketh';
+  
   const [darkMode, setDarkMode] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -167,7 +171,7 @@ const App = () => {
       };
       const gistData = {
         description: 'AI Architecture Articles Backup',
-        public: false,
+        public: true, // Changed to public so it can be read without auth
         files: { 'ai-architecture-articles.json': { content: JSON.stringify(data, null, 2) } }
       };
       let response;
@@ -226,7 +230,6 @@ const App = () => {
       const manualArticles = (data.articles || []).filter(a => a.manual);
       if (manualArticles.length > 0) localStorage.setItem('manualArticles', JSON.stringify(manualArticles));
       
-      // CRITICAL FIX: Update cachedArticles to include manual articles so they show immediately on reload
       const cachedArticles = JSON.parse(localStorage.getItem('cachedArticles') || '[]');
       const manualIds = new Set(manualArticles.map(a => a.id));
       const cachedWithoutManual = cachedArticles.filter(a => !a.manual);
@@ -241,6 +244,50 @@ const App = () => {
       setGistStatus('error');
       setGistError(err.message);
       alert('❌ Error: ' + err.message);
+    }
+  };
+
+  // NEW FUNCTION: Load from public gist without authentication
+  const loadFromPublicGist = async () => {
+    try {
+      // Load from public gist URL - no authentication required
+      const response = await fetch(
+        `https://gist.githubusercontent.com/${DEFAULT_GIST_USER}/${DEFAULT_GIST_ID}/raw/ai-architecture-articles.json`
+      );
+      
+      if (!response.ok) throw new Error('Failed to load public gist');
+      
+      const data = await response.json();
+      
+      // Load manual articles from the gist
+      if (data.articles) {
+        const manualArticles = data.articles.filter(a => a.manual);
+        if (manualArticles.length > 0) {
+          localStorage.setItem('manualArticles', JSON.stringify(manualArticles));
+          console.log(`✅ Loaded ${manualArticles.length} manual articles from public gist`);
+        }
+      }
+      
+      // Load saved articles
+      if (data.savedArticles) {
+        setSavedArticles(data.savedArticles);
+        localStorage.setItem('savedArticles', JSON.stringify(data.savedArticles));
+      }
+      
+      // Load archived articles
+      if (data.archivedArticles) {
+        localStorage.setItem('archivedArticles', JSON.stringify(data.archivedArticles));
+      }
+      
+      // Load deleted articles
+      if (data.deletedArticles) {
+        localStorage.setItem('deletedArticles', JSON.stringify(data.deletedArticles));
+      }
+      
+      console.log('✅ Successfully loaded from public gist');
+    } catch (err) {
+      console.warn('Could not load from public gist:', err.message);
+      // Fail silently - app will still work with RSS feeds
     }
   };
 
@@ -275,14 +322,11 @@ const App = () => {
   const categorizeArticle = (title, description, defaultCategory) => {
     const text = (title + ' ' + description).toLowerCase();
     
-    // Chat Engines - check first for specificity
     if (text.match(/chatgpt|gpt-4|gpt-3|claude|perplexity|gemini|bard|copilot|bing chat|llama/)) return 'Chat Engines';
     
-    // Residential vs Commercial
     if (text.match(/residential|house|home|apartment|villa|housing|single.family|multi.family/)) return 'Residential';
     if (text.match(/commercial|office|retail|hotel|restaurant|hospitality|workplace|corporate/)) return 'Commercial';
     
-    // More specific categorization
     if (text.match(/design process|workflow|collaboration|practice/)) return 'Design Process';
     if (text.match(/tool|software|app|platform|midjourney|dall-e|plugin|extension/)) return 'AI Tools';
     if (text.match(/machine learning|deep learning|neural network/)) return 'Machine Learning';
@@ -451,6 +495,9 @@ const App = () => {
       setLoading(true);
       setError(null);
       try {
+        // LOAD FROM PUBLIC GIST FIRST - No authentication required!
+        await loadFromPublicGist();
+        
         const savedFeeds = localStorage.getItem('customFeeds');
         let feedsToFetch = DEFAULT_RSS_FEEDS;
         if (savedFeeds) {
@@ -625,7 +672,6 @@ const App = () => {
     const matchesCategory = selectedCategory === 'all' || article.category === selectedCategory;
     const matchesSource = selectedSource === 'all' || article.source === selectedSource;
     
-    // Check if article is from today
     const isNewToday = (() => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -644,7 +690,6 @@ const App = () => {
 
   const trendingCount = articles.filter(a => a.trending && !a.archived).length;
   
-  // Count articles added today
   const getArticlesAddedToday = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
