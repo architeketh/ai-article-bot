@@ -1,6 +1,85 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Filter, Bookmark, TrendingUp, Clock, ExternalLink, Moon, Sun, Building2, BarChart3, Calendar, Sparkles, RefreshCw, AlertCircle, Heart, Archive, ArchiveRestore, Trash2, Download, Upload, Database, Cloud, CloudOff, Settings, Check, X, Mail } from 'lucide-react';
+import { Search, Filter, Bookmark, TrendingUp, Clock, ExternalLink, Moon, Sun, Building2, BarChart3, Calendar, Sparkles, RefreshCw, AlertCircle, Heart, Archive, ArchiveRestore, Trash2, Download, Upload, Database, Cloud, CloudOff, Settings, X, Mail } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+
+/* =========================
+   Public Gist seed fallback
+   ========================= */
+const DEFAULT_PUBLIC_GIST_ID = 'e89e6b358e664cc9bbe2ed4bd0233638';
+const GIST_FILENAME = 'ai-architecture-articles.json';
+
+const reviveDates = (list = []) =>
+  list.map(a => ({ ...a, date: a?.date ? new Date(a.date) : new Date() }));
+
+async function tryLoadPublicGist(gistId = DEFAULT_PUBLIC_GIST_ID) {
+  try {
+    const metaRes = await fetch(`https://api.github.com/gists/${gistId}`);
+    if (!metaRes.ok) return null;
+    const meta = await metaRes.json();
+    const file = meta.files?.[GIST_FILENAME];
+    if (!file?.raw_url) return null;
+
+    const rawRes = await fetch(file.raw_url);
+    if (!rawRes.ok) return null;
+    const data = await rawRes.json();
+
+    const importedArticles = reviveDates(data.articles || []);
+    const importedSaved = data.savedArticles || [];
+    const importedArchived = reviveDates(data.archivedArticles || []);
+    const importedDeleted = data.deletedArticles || [];
+
+    // Persist so subsequent visits are instant
+    localStorage.setItem('cachedArticles', JSON.stringify(importedArticles));
+    localStorage.setItem('savedArticles', JSON.stringify(importedSaved));
+    localStorage.setItem('archivedArticles', JSON.stringify(importedArchived));
+    localStorage.setItem('deletedArticles', JSON.stringify(importedDeleted));
+
+    return {
+      articles: importedArticles,
+      savedArticles: importedSaved,
+      archivedArticles: importedArchived,
+      deletedArticles: importedDeleted
+    };
+  } catch {
+    return null;
+  }
+}
+
+/* =========================
+   RSS provider fallback
+   ========================= */
+async function fetchFeedItems(feedUrl) {
+  // Provider A: rss2json (with key)
+  try {
+    const a = await fetch(
+      'https://api.rss2json.com/v1/api.json?rss_url=' +
+        encodeURIComponent(feedUrl) +
+        '&api_key=q1ihf2w1uk1uwljssn3dngzhms9ajhqjpzfpqgf4&count=50'
+    );
+    if (a.ok) {
+      const data = await a.json();
+      if (data?.status === 'ok' && Array.isArray(data.items)) return data.items;
+    }
+  } catch {}
+
+  // Provider B: feed2json (no key)
+  try {
+    const b = await fetch('https://feed2json.org/convert?url=' + encodeURIComponent(feedUrl));
+    if (b.ok) {
+      const data = await b.json();
+      if (Array.isArray(data.items)) {
+        return data.items.map(it => ({
+          title: it.title,
+          description: it.summary || it.content_html || '',
+          link: it.url,
+          pubDate: it.date_published
+        }));
+      }
+    }
+  } catch {}
+
+  return [];
+}
 
 const App = () => {
   const [darkMode, setDarkMode] = useState(true);
@@ -57,7 +136,7 @@ const App = () => {
         setGistStatus('connected');
       }
     }
-    
+
     const savedFeeds = localStorage.getItem('customFeeds');
     if (savedFeeds) {
       try {
@@ -81,41 +160,37 @@ const App = () => {
         setViewCount(sessionViews);
       }
     };
-    
+
     fetchViewCount();
   }, []);
 
-  const handleOpenFeedManager = () => {
-    setShowFeedManager(true);
-  };
+  const handleOpenFeedManager = () => setShowFeedManager(true);
 
   const addFeed = () => {
     const url = prompt('Enter RSS feed URL:');
     if (!url || !url.trim()) return;
-    
+
     const source = prompt('Enter source name:');
     if (!source || !source.trim()) return;
-    
+
     const category = prompt('Enter category:');
     const logo = prompt('Enter emoji logo:') || '📰';
-    
+
     const newFeed = {
       url: url.trim(),
       source: source.trim(),
       category: category?.trim() || 'General',
-      logo: logo,
+      logo,
       priority: 1,
       requireBoth: false,
       enabled: true
     };
-    
+
     const updatedFeeds = [...(customFeeds.length > 0 ? customFeeds : DEFAULT_RSS_FEEDS), newFeed];
     setCustomFeeds(updatedFeeds);
     localStorage.setItem('customFeeds', JSON.stringify(updatedFeeds));
-    
-    if (confirm('✅ Feed added! Refresh now?')) {
-      window.location.reload();
-    }
+
+    if (confirm('✅ Feed added! Refresh now?')) window.location.reload();
   };
 
   const toggleFeed = (index) => {
@@ -123,10 +198,7 @@ const App = () => {
     feedsToUpdate[index].enabled = !feedsToUpdate[index].enabled;
     setCustomFeeds(feedsToUpdate);
     localStorage.setItem('customFeeds', JSON.stringify(feedsToUpdate));
-    
-    if (confirm(`Feed ${feedsToUpdate[index].enabled ? 'enabled' : 'disabled'}! Refresh now?`)) {
-      window.location.reload();
-    }
+    if (confirm(`Feed ${feedsToUpdate[index].enabled ? 'enabled' : 'disabled'}! Refresh now?`)) window.location.reload();
   };
 
   const deleteFeed = (index) => {
@@ -135,10 +207,7 @@ const App = () => {
       feedsToUpdate.splice(index, 1);
       setCustomFeeds(feedsToUpdate);
       localStorage.setItem('customFeeds', JSON.stringify(feedsToUpdate));
-      
-      if (confirm('Feed deleted! Refresh now?')) {
-        window.location.reload();
-      }
+      if (confirm('Feed deleted! Refresh now?')) window.location.reload();
     }
   };
 
@@ -146,10 +215,7 @@ const App = () => {
     if (confirm('Reset to default feeds?')) {
       setCustomFeeds([]);
       localStorage.removeItem('customFeeds');
-      
-      if (confirm('✅ Reset! Refresh now?')) {
-        window.location.reload();
-      }
+      if (confirm('✅ Reset! Refresh now?')) window.location.reload();
     }
   };
 
@@ -160,15 +226,15 @@ const App = () => {
       const data = {
         exportDate: new Date().toISOString(),
         version: '1.0',
-        articles: articles,
-        savedArticles: savedArticles,
+        articles,
+        savedArticles,
         archivedArticles: articles.filter(a => a.archived),
         deletedArticles: JSON.parse(localStorage.getItem('deletedArticles') || '[]')
       };
       const gistData = {
         description: 'AI Architecture Articles Backup',
-        public: false,
-        files: { 'ai-architecture-articles.json': { content: JSON.stringify(data, null, 2) } }
+        public: true, // ensure readable without token
+        files: { [GIST_FILENAME]: { content: JSON.stringify(data, null, 2) } }
       };
       let response;
       if (gistId) {
@@ -203,40 +269,57 @@ const App = () => {
       const timer = setTimeout(() => { syncToGist(); }, 3000);
       return () => clearTimeout(timer);
     }
-  }, [articles, savedArticles, gistToken]);
+  }, [articles, savedArticles, gistToken, loading]); // include loading
 
   const loadFromGist = async () => {
-    if (!gistToken || !gistId) return;
+    const gid = (gistId || DEFAULT_PUBLIC_GIST_ID).trim();
+
+    // Try public first
+    const publicData = await tryLoadPublicGist(gid);
+    if (publicData) {
+      setSavedArticles(publicData.savedArticles || []);
+      setArticles(publicData.articles || []);
+      setGistStatus('connected');
+      setGistError('');
+      alert('✅ Loaded from public GitHub Gist!');
+      setTimeout(() => window.location.reload(), 300);
+      return;
+    }
+
+    // Fall back to token flow if Gist is private
+    if (!gistToken) {
+      setGistStatus('error');
+      setGistError('Gist is private; add a token or make Gist public.');
+      alert('❌ Gist is private; add a token or make it public.');
+      return;
+    }
+
     try {
       setGistStatus('syncing');
-      const response = await fetch(`https://api.github.com/gists/${gistId}`, {
+      const response = await fetch(`https://api.github.com/gists/${gid}`, {
         headers: { 'Authorization': `token ${gistToken}` }
       });
       if (!response.ok) throw new Error('Failed to load');
       const gist = await response.json();
-      const fileContent = gist.files['ai-architecture-articles.json']?.content;
+      const fileContent = gist.files[GIST_FILENAME]?.content;
       if (!fileContent) throw new Error('No data found');
       const data = JSON.parse(fileContent);
-      if (data.savedArticles) {
-        setSavedArticles(data.savedArticles);
-        localStorage.setItem('savedArticles', JSON.stringify(data.savedArticles));
-      }
-      if (data.archivedArticles) localStorage.setItem('archivedArticles', JSON.stringify(data.archivedArticles));
-      if (data.deletedArticles) localStorage.setItem('deletedArticles', JSON.stringify(data.deletedArticles));
-      const manualArticles = (data.articles || []).filter(a => a.manual);
-      if (manualArticles.length > 0) localStorage.setItem('manualArticles', JSON.stringify(manualArticles));
-      
-      // CRITICAL FIX: Update cachedArticles to include manual articles so they show immediately on reload
-      const cachedArticles = JSON.parse(localStorage.getItem('cachedArticles') || '[]');
-      const manualIds = new Set(manualArticles.map(a => a.id));
-      const cachedWithoutManual = cachedArticles.filter(a => !a.manual);
-      const updatedCache = [...manualArticles, ...cachedWithoutManual];
-      localStorage.setItem('cachedArticles', JSON.stringify(updatedCache));
-      
+
+      const importedArticles = reviveDates(data.articles || []);
+      const importedSaved = data.savedArticles || [];
+      const importedArchived = reviveDates(data.archivedArticles || []);
+      const importedDeleted = data.deletedArticles || [];
+
+      setSavedArticles(importedSaved);
+      localStorage.setItem('savedArticles', JSON.stringify(importedSaved));
+      localStorage.setItem('archivedArticles', JSON.stringify(importedArchived));
+      localStorage.setItem('deletedArticles', JSON.stringify(importedDeleted));
+      localStorage.setItem('cachedArticles', JSON.stringify(importedArticles));
+
       setGistStatus('connected');
       setGistError('');
-      alert('✅ Loaded from GitHub!');
-      setTimeout(() => { window.location.reload(); }, 1000);
+      alert('✅ Loaded from private GitHub Gist!');
+      setTimeout(() => window.location.reload(), 300);
     } catch (err) {
       setGistStatus('error');
       setGistError(err.message);
@@ -274,15 +357,9 @@ const App = () => {
 
   const categorizeArticle = (title, description, defaultCategory) => {
     const text = (title + ' ' + description).toLowerCase();
-    
-    // Chat Engines - check first for specificity
     if (text.match(/chatgpt|gpt-4|gpt-3|claude|perplexity|gemini|bard|copilot|bing chat|llama/)) return 'Chat Engines';
-    
-    // Residential vs Commercial
     if (text.match(/residential|house|home|apartment|villa|housing|single.family|multi.family/)) return 'Residential';
     if (text.match(/commercial|office|retail|hotel|restaurant|hospitality|workplace|corporate/)) return 'Commercial';
-    
-    // More specific categorization
     if (text.match(/design process|workflow|collaboration|practice/)) return 'Design Process';
     if (text.match(/tool|software|app|platform|midjourney|dall-e|plugin|extension/)) return 'AI Tools';
     if (text.match(/machine learning|deep learning|neural network/)) return 'Machine Learning';
@@ -303,15 +380,15 @@ const App = () => {
     const foundKeywords = [];
     const lowerText = text.toLowerCase();
     const keywordGroups = {
-      'midjourney': ['midjourney'], 
-      'stable diffusion': ['stable diffusion'], 
+      'midjourney': ['midjourney'],
+      'stable diffusion': ['stable diffusion'],
       'enscape': ['enscape'],
-      'lumion': ['lumion'], 
+      'lumion': ['lumion'],
       'ai rendering': ['ai.*render', 'render.*ai', 'lookx', 'veras'],
-      'chatgpt': ['chatgpt', 'gpt'], 
+      'chatgpt': ['chatgpt', 'gpt'],
       'generative design': ['generative', 'parametric'],
       'visualization': ['visualization', 'photorealistic'],
-      'bim': ['bim', 'revit'], 
+      'bim': ['bim', 'revit'],
       'machine learning': ['machine learning', 'ml', 'neural'],
       'computational': ['algorithm', 'computational'],
       'vr/ar': ['virtual reality', 'augmented reality', 'vr', 'ar'],
@@ -325,14 +402,14 @@ const App = () => {
 
   const exportData = (type = 'all') => {
     const exportData = {
-      exportDate: new Date().toISOString(), 
-      version: '1.0', 
-      articles: articles, 
-      savedArticles: savedArticles,
+      exportDate: new Date().toISOString(),
+      version: '1.0',
+      articles,
+      savedArticles,
       archivedArticles: articles.filter(a => a.archived)
     };
     let dataToExport, filename;
-    switch(type) {
+    switch (type) {
       case 'archived':
         dataToExport = { ...exportData, articles: exportData.archivedArticles };
         filename = `archived-${new Date().toISOString().split('T')[0]}.json`;
@@ -369,7 +446,7 @@ const App = () => {
         const confirmed = confirm(`Import ${importedData.articles.length} articles?`);
         if (!confirmed) return;
         const existingIds = new Set(articles.map(a => a.id));
-        const newArticles = importedData.articles.filter(a => !existingIds.has(a.id));
+        const newArticles = reviveDates(importedData.articles).filter(a => !existingIds.has(a.id));
         setArticles(prev => [...prev, ...newArticles]);
         if (importedData.savedArticles) {
           const newSaved = [...new Set([...savedArticles, ...importedData.savedArticles])];
@@ -392,19 +469,19 @@ const App = () => {
     if (!title || !title.trim()) return;
     const summary = prompt('Enter summary (optional):') || 'No description';
     const newArticle = {
-      id: url, 
-      title: title, 
-      source: 'Manual Addition', 
+      id: url,
+      title,
+      source: 'Manual Addition',
       sourceLogo: '📌',
-      category: categorizeArticle(title, summary, 'Manual'), 
-      date: new Date(), 
+      category: categorizeArticle(title, summary, 'Manual'),
+      date: new Date(),
       readTime: 5,
-      summary: summary, 
-      url: url, 
-      trending: false, 
+      summary,
+      url,
+      trending: false,
       keywords: extractKeywords(title + ' ' + summary),
-      priority: 1, 
-      archived: false, 
+      priority: 1,
+      archived: false,
       manual: true
     };
     setArticles(prev => [newArticle, ...prev]);
@@ -451,6 +528,19 @@ const App = () => {
       setLoading(true);
       setError(null);
       try {
+        // Seed from public Gist if no cache yet
+        const cachedArticlesLS = JSON.parse(localStorage.getItem('cachedArticles') || '[]');
+        if (cachedArticlesLS.length === 0) {
+          const seeded = await tryLoadPublicGist(
+            (localStorage.getItem('githubGistId') || '').trim() || DEFAULT_PUBLIC_GIST_ID
+          );
+          if (seeded?.articles?.length) {
+            setArticles(seeded.articles);
+            setSavedArticles(seeded.savedArticles || []);
+          }
+        }
+
+        // Read any saved custom feeds
         const savedFeeds = localStorage.getItem('customFeeds');
         let feedsToFetch = DEFAULT_RSS_FEEDS;
         if (savedFeeds) {
@@ -462,29 +552,29 @@ const App = () => {
             console.error('Error loading custom feeds:', e);
           }
         }
-        
+
         const cachedArticles = JSON.parse(localStorage.getItem('cachedArticles') || '[]');
         const deletedArticles = JSON.parse(localStorage.getItem('deletedArticles') || '[]');
         if (cachedArticles.length > 0) {
-          const validCached = cachedArticles.filter(a => !deletedArticles.includes(a.id));
+          const validCached = cachedArticles.filter(a => !deletedArticles.includes(a.id)).map(a => ({ ...a, date: new Date(a.date) }));
           setArticles(validCached);
           setLoading(false);
         }
-        const archivedArticles = JSON.parse(localStorage.getItem('archivedArticles') || '[]');
-        const manualArticles = JSON.parse(localStorage.getItem('manualArticles') || '[]');
+
+        const archivedArticles = reviveDates(JSON.parse(localStorage.getItem('archivedArticles') || '[]'));
+        const manualArticles = reviveDates(JSON.parse(localStorage.getItem('manualArticles') || '[]'));
         const allArticles = [];
         const newFeedStatus = {};
-        
+
         for (const feed of feedsToFetch) {
           try {
-            const response = await fetch('https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(feed.url) + '&api_key=q1ihf2w1uk1uwljssn3dngzhms9ajhqjpzfpqgf4&count=50');
-            if (!response.ok) {
-              newFeedStatus[feed.source] = { status: 'failed', count: 0 };
+            const items = await fetchFeedItems(feed.url);
+            if (!items.length) {
+              newFeedStatus[feed.source] = { status: 'failed', count: 0, totalFetched: 0 };
               continue;
             }
-            const data = await response.json();
-            if (data.status === 'ok' && data.items) {
-              const processedArticles = data.items.filter(item => {
+            const processedArticles = items
+              .filter(item => {
                 const title = item.title || '';
                 const description = item.description || '';
                 const text = (title + ' ' + description).toLowerCase();
@@ -494,55 +584,62 @@ const App = () => {
                 if (hasRendering) return true;
                 if (feed.requireBoth) return hasAI && hasArch;
                 return hasAI || hasArch;
-              }).map((item) => {
+              })
+              .map(item => {
                 const title = item.title || 'Untitled';
                 const description = item.description || '';
                 const cleanDescription = description.replace(/<[^>]*>/g, '').substring(0, 200);
                 const stableId = item.link || item.guid || (feed.source + '-' + title.replace(/\W/g, '').substring(0, 30));
                 if (deletedArticles.includes(stableId)) return null;
                 return {
-                  id: stableId, 
-                  title: title, 
-                  source: feed.source, 
+                  id: stableId,
+                  title,
+                  source: feed.source,
                   sourceLogo: feed.logo,
                   category: categorizeArticle(title, description, feed.category),
-                  date: new Date(item.pubDate || Date.now()), 
+                  date: new Date(item.pubDate || Date.now()),
                   readTime: 5,
-                  summary: cleanDescription + '...', 
-                  url: item.link || '#', 
+                  summary: cleanDescription + '...',
+                  url: item.link || '#',
                   trending: Math.random() > 0.75,
                   keywords: extractKeywords(title + ' ' + description),
-                  priority: feed.priority, 
-                  archived: false, 
+                  priority: feed.priority,
+                  archived: false,
                   manual: false
                 };
-              }).filter(item => item !== null);
-              allArticles.push(...processedArticles);
-              newFeedStatus[feed.source] = { status: 'success', count: processedArticles.length, totalFetched: data.items.length };
-            }
+              })
+              .filter(Boolean);
+
+            allArticles.push(...processedArticles);
+            newFeedStatus[feed.source] = { status: 'success', count: processedArticles.length, totalFetched: items.length };
           } catch (feedError) {
             console.error('Feed error:', feedError);
-            newFeedStatus[feed.source] = { status: 'error', count: 0 };
+            newFeedStatus[feed.source] = { status: 'error', count: 0, totalFetched: 0 };
           }
         }
-        
+
         setFeedStatus(newFeedStatus);
-        allArticles.push(...manualArticles.filter(a => !deletedArticles.includes(a.id)));
-        const combinedArticles = [...allArticles];
+
+        // include manual articles
+        const combined = [...allArticles, ...manualArticles.filter(a => !deletedArticles.includes(a.id))];
         const newArticleIds = new Set(allArticles.map(a => a.id));
+
+        // carry forward archived-only items
         archivedArticles.forEach(archived => {
           if (!newArticleIds.has(archived.id) && !deletedArticles.includes(archived.id)) {
-            combinedArticles.push({ ...archived, archived: true });
+            combined.push({ ...archived, archived: true });
           }
         });
-        combinedArticles.sort((a, b) => {
+
+        combined.sort((a, b) => {
           if (a.archived !== b.archived) return a.archived ? 1 : -1;
           if (a.priority !== b.priority) return a.priority - b.priority;
           return b.date - a.date;
         });
-        setArticles(combinedArticles);
-        localStorage.setItem('cachedArticles', JSON.stringify(combinedArticles));
-        if (combinedArticles.length === 0) setError('No articles found. Try refreshing.');
+
+        setArticles(combined);
+        localStorage.setItem('cachedArticles', JSON.stringify(combined));
+        if (combined.length === 0) setError('No articles found. Try refreshing.');
       } catch (err) {
         console.error('Fetch error:', err);
         setError('Failed to load articles');
@@ -550,6 +647,7 @@ const App = () => {
         setLoading(false);
       }
     };
+
     fetchArticles();
     const interval = setInterval(fetchArticles, 30 * 60 * 1000);
     return () => clearInterval(interval);
@@ -594,9 +692,9 @@ const App = () => {
   };
 
   const chartData = getCategoryData();
-  const archivedArticles = articles.filter(a => a.archived);
+  const archivedArticlesList = articles.filter(a => a.archived);
   const archiveCategoryCount = {};
-  archivedArticles.forEach(article => {
+  archivedArticlesList.forEach(article => {
     if (article.category) archiveCategoryCount[article.category] = (archiveCategoryCount[article.category] || 0) + 1;
   });
   const archiveChartData = Object.entries(archiveCategoryCount).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
@@ -624,8 +722,7 @@ const App = () => {
     const matchesSearch = article.title.toLowerCase().includes(searchQuery.toLowerCase()) || article.summary.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = selectedCategory === 'all' || article.category === selectedCategory;
     const matchesSource = selectedSource === 'all' || article.source === selectedSource;
-    
-    // Check if article is from today
+
     const isNewToday = (() => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -633,18 +730,17 @@ const App = () => {
       articleDate.setHours(0, 0, 0, 0);
       return articleDate.getTime() === today.getTime();
     })();
-    
+
     const matchesNewToday = !showOnlyNewToday || isNewToday;
-    
+
     return matchesSearch && matchesCategory && matchesSource && matchesNewToday;
   }).sort((a, b) => {
     if (activeTab === 'archive') return b.date - a.date;
-    return sortBy === 'date' ? b.date - a.date : b.trending - a.trending;
+    return sortBy === 'date' ? b.date - a.date : (b.trending ? 1 : 0) - (a.trending ? 1 : 0);
   });
 
   const trendingCount = articles.filter(a => a.trending && !a.archived).length;
-  
-  // Count articles added today
+
   const getArticlesAddedToday = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -699,7 +795,7 @@ const App = () => {
                 <X className="w-5 h-5 sm:w-6 sm:h-6" />
               </button>
             </div>
-            
+
             <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row gap-2 sm:gap-3">
               <button onClick={addFeed} className="px-4 sm:px-6 py-2 sm:py-3 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-600 hover:to-emerald-600 transition-all hover:scale-105 shadow-lg text-sm sm:text-base">+ Add Feed</button>
               <button onClick={resetFeeds} className={'px-4 sm:px-6 py-2 sm:py-3 rounded-full transition-all hover:scale-105 text-sm sm:text-base ' + (darkMode ? 'bg-orange-500/10 text-orange-400 hover:bg-orange-500/20' : 'bg-orange-50 text-orange-700')}>Reset</button>
@@ -746,7 +842,7 @@ const App = () => {
 
             <div className="mb-4 sm:mb-5">
               <label className={'block text-xs sm:text-sm mb-2 ' + (darkMode ? 'text-gray-400' : 'text-gray-700')}>GitHub Token</label>
-              <input type="password" value={gistToken} onChange={(e) => setGistToken(e.target.value)} placeholder="ghp_..." className={'w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl sm:rounded-2xl transition-all focus:ring-2 focus:ring-blue-500 text-sm sm:text-base ' + (darkMode ? 'bg-gray-800 text-white border border-gray-700' : 'bg-gray-100')} />
+              <input type="password" value={gistToken} onChange={(e) => setGistToken(e.target.value)} placeholder="ghp_..." className={'W-full w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl sm:rounded-2xl transition-all focus:ring-2 focus:ring-blue-500 text-sm sm:text-base ' + (darkMode ? 'bg-gray-800 text-white border border-gray-700' : 'bg-gray-100')} />
             </div>
 
             <div className="mb-4 sm:mb-6">
@@ -774,17 +870,17 @@ const App = () => {
             <button onClick={() => setDarkMode(!darkMode)} className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800' : 'bg-gray-100 hover:bg-gray-200')}>
               {darkMode ? <Sun className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400" /> : <Moon className="w-4 h-4 sm:w-5 sm:h-5" />}
             </button>
-            
+
             <div className="flex items-center gap-1 sm:gap-2">
               <button onClick={sendFeedback} className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-purple-400' : 'bg-gray-100 hover:bg-gray-200 text-purple-600')} title="Email Feedback">
                 <Mail className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
-              
+
               <button onClick={() => setShowGistSettings(true)} className={'p-1.5 sm:p-2.5 rounded-full relative transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800' : 'bg-gray-100 hover:bg-gray-200') + ' ' + (gistStatus === 'connected' ? 'text-green-400' : 'text-gray-400')}>
                 {gistStatus === 'connected' ? <Cloud className="w-4 h-4 sm:w-5 sm:h-5" /> : <CloudOff className="w-4 h-4 sm:w-5 sm:h-5" />}
                 {gistStatus === 'syncing' && <span className="absolute top-0 right-0 w-1.5 h-1.5 sm:w-2 sm:h-2 bg-blue-500 rounded-full animate-ping"></span>}
               </button>
-              
+
               <div className="relative">
                 <button onClick={() => setShowExportMenu(!showExportMenu)} className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-purple-400' : 'bg-gray-100 hover:bg-gray-200 text-purple-600')}>
                   <Database className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -809,7 +905,7 @@ const App = () => {
                       <Upload className="w-3 h-3 sm:w-4 sm:h-4" />
                       <span className="text-xs sm:text-sm">Import from File</span>
                     </button>
-                    {gistId && (
+                    {(gistId || DEFAULT_PUBLIC_GIST_ID) && (
                       <button onClick={() => { loadFromGist(); setShowExportMenu(false); }} className={'w-full flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-left transition-all hover:scale-[1.02] ' + (darkMode ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100')}>
                         <Cloud className="w-3 h-3 sm:w-4 sm:h-4" />
                         <span className="text-xs sm:text-sm">Load from GitHub</span>
@@ -818,26 +914,26 @@ const App = () => {
                   </div>
                 )}
               </div>
-              
+
               <button onClick={() => window.location.reload()} className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-green-400' : 'bg-gray-100 hover:bg-gray-200 text-green-600')}>
                 <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
-              
+
               <button onClick={() => setShowChart(!showChart)} className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-blue-400' : 'bg-gray-100 hover:bg-gray-200 text-blue-600')}>
                 <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
-              
+
               <button onClick={() => setShowFeedStatus(!showFeedStatus)} className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-cyan-400' : 'bg-gray-100 hover:bg-gray-200 text-cyan-600')}>
                 <Settings className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
-              
+
               <button onClick={handleOpenFeedManager} className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-purple-400' : 'bg-gray-100 hover:bg-gray-200 text-purple-600')}>
                 <Filter className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
             </div>
           </div>
 
-          {/* Hero Section with Gradient */}
+          {/* Hero */}
           <div className="text-center py-6 sm:py-12">
             <div className="relative inline-block">
               <h1 className={'text-3xl sm:text-5xl md:text-7xl font-bold mb-2 sm:mb-4 tracking-tight bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 bg-clip-text text-transparent animate-gradient'}>
@@ -881,7 +977,7 @@ const App = () => {
             </div>
           </div>
 
-          {/* Tabs with Gradient Active State */}
+          {/* Tabs */}
           <div className="flex gap-1.5 sm:gap-2 mb-4 sm:mb-6 overflow-x-auto pb-2">
             <button onClick={() => { setActiveTab('all'); setShowOnlyNewToday(false); }} className={'px-3 sm:px-6 py-1.5 sm:py-2.5 rounded-full font-medium transition-all hover:scale-105 text-xs sm:text-base whitespace-nowrap ' + (activeTab === 'all' ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg' : (darkMode ? 'bg-gray-900 text-gray-400 hover:bg-gray-800' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'))}>
               Recent ({articles.filter(a => !a.archived).length})
@@ -892,11 +988,11 @@ const App = () => {
             </button>
             <button onClick={() => { setActiveTab('archive'); setShowOnlyNewToday(false); }} className={'px-3 sm:px-6 py-1.5 sm:py-2.5 rounded-full font-medium flex items-center gap-1 sm:gap-2 transition-all hover:scale-105 whitespace-nowrap text-xs sm:text-base ' + (activeTab === 'archive' ? 'bg-gradient-to-r from-orange-500 to-yellow-500 text-white shadow-lg' : (darkMode ? 'bg-gray-900 text-gray-400 hover:bg-gray-800' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'))}>
               <Archive className="w-3 h-3 sm:w-4 sm:h-4" />
-              Archive ({archivedArticles.length})
+              Archive ({archivedArticlesList.length})
             </button>
           </div>
 
-          {/* Search with Gradient Border */}
+          {/* Search */}
           <div className="relative mb-4 sm:mb-6">
             <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full opacity-20 blur-sm"></div>
             <div className="relative">
@@ -908,7 +1004,7 @@ const App = () => {
             </div>
           </div>
 
-          {/* Category Pills with Hover Effects */}
+          {/* Category Pills */}
           <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-4 sm:pb-6">
             <button onClick={() => setShowFilters(!showFilters)} className={'flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-full transition-all hover:scale-105 text-xs sm:text-sm whitespace-nowrap ' + (darkMode ? 'bg-gray-900 text-gray-400 hover:bg-gray-800' : 'bg-gray-100 hover:bg-gray-200')}>
               <Filter className="w-3 h-3 sm:w-4 sm:h-4" />Filters
@@ -919,7 +1015,7 @@ const App = () => {
                 New Today ({newTodayCount})
               </button>
             )}
-            {activeCategories.slice(0, 8).map(cat => (
+            {getActiveCategoriesForTab().slice(0, 8).map(cat => (
               <button key={cat} onClick={() => setSelectedCategory(cat)} className={'px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-full text-xs sm:text-sm font-medium whitespace-nowrap transition-all hover:scale-105 ' + (selectedCategory === cat ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg' : (darkMode ? 'bg-gray-900 text-gray-400 hover:bg-gray-800' : 'bg-gray-100 hover:bg-gray-200'))}>
                 {cat === 'all' ? 'All' : cat}
               </button>
@@ -933,10 +1029,7 @@ const App = () => {
                   {categories.map(cat => <option key={cat} value={cat}>{cat === 'all' ? 'All' : cat}</option>)}
                 </select>
                 <select value={selectedSource} onChange={(e) => setSelectedSource(e.target.value)} className={'w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl sm:rounded-2xl transition-all focus:ring-2 focus:ring-purple-500 text-sm sm:text-base ' + (darkMode ? 'bg-gray-800 text-white border border-gray-700' : 'bg-white border border-gray-200')}>
-                  {sources.map(s => {
-                    if (s === '---') return <option key="separator" disabled>────────────</option>;
-                    return <option key={s} value={s}>{s === 'all' ? 'All Sources' : s}</option>;
-                  })}
+                  {['all', ...(new Set(articles.map(a => a.source))).values()].map((s, idx) => <option key={`${s}-${idx}`} value={s}>{s === 'all' ? 'All Sources' : s}</option>)}
                 </select>
                 <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className={'w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl sm:rounded-2xl transition-all focus:ring-2 focus:ring-purple-500 text-sm sm:text-base ' + (darkMode ? 'bg-gray-800 text-white border border-gray-700' : 'bg-white border border-gray-200')}>
                   <option value="date">Latest</option>
@@ -989,7 +1082,7 @@ const App = () => {
           </div>
         )}
 
-        {activeTab === 'archive' && archivedArticles.length === 0 && (
+        {activeTab === 'archive' && archivedArticlesList.length === 0 && (
           <div className={'text-center py-16 sm:py-24 ' + (darkMode ? 'text-gray-500' : 'text-gray-400')}>
             <Archive className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-4 sm:mb-6 opacity-30" />
             <p className="text-lg sm:text-2xl font-light">No archived articles</p>
@@ -1039,10 +1132,10 @@ const App = () => {
           </div>
         )}
 
-        {/* Articles - Mobile optimized cards */}
+        {/* Articles */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5">
           {filteredArticles.map(article => (
-            <article key={article.id} className={'group rounded-2xl sm:rounded-3xl p-3 sm:p-5 border transition-all hover:shadow-2xl hover:-translate-y-1 ' + (darkMode ? 'bg-gradient-to-br from-gray-900 to-gray-800 border-gray-800 hover:border-gray-700' : 'bg-white border-gray-200 hover:border-gray-300')}>
+            <article key={article.id} className={'group rounded-2xl sm:rounded-3xl p-3 sm:5 border transition-all hover:shadow-2xl hover:-translate-y-1 ' + (darkMode ? 'bg-gradient-to-br from-gray-900 to-gray-800 border-gray-800 hover:border-gray-700' : 'bg-white border-gray-200 hover:border-gray-300')}>
               <div className="flex items-start justify-between mb-2 sm:mb-3">
                 <div className="flex items-center gap-1.5 sm:gap-2">
                   <span className="text-base sm:text-xl">{article.sourceLogo}</span>
@@ -1052,7 +1145,7 @@ const App = () => {
                   <Bookmark className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill={savedArticles.includes(article.id) ? 'currentColor' : 'none'} />
                 </button>
               </div>
-              
+
               {(article.archived || article.manual) && (
                 <div className="flex gap-1.5 sm:gap-2 mb-2 sm:mb-3">
                   {article.archived && (
@@ -1068,21 +1161,21 @@ const App = () => {
                   )}
                 </div>
               )}
-              
+
               <h2 className={'text-sm sm:text-base font-bold mb-2 sm:mb-3 line-clamp-2 group-hover:bg-gradient-to-r group-hover:from-blue-500 group-hover:to-purple-500 group-hover:bg-clip-text group-hover:text-transparent transition-all ' + (darkMode ? 'text-white' : 'text-gray-900')}>{article.title}</h2>
               <p className={'text-xs mb-2 sm:mb-3 line-clamp-2 ' + (darkMode ? 'text-gray-500' : 'text-gray-600')}>{article.summary}</p>
-              
+
               {article.keywords.length > 0 && (
                 <div className="flex flex-wrap gap-1 sm:gap-1.5 mb-2 sm:mb-3">
                   {article.keywords.slice(0, 3).map((kw, i) => <span key={i} className={'px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-xs transition-all hover:scale-105 ' + (darkMode ? 'bg-gray-800 text-gray-400 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200')}>{kw}</span>)}
                 </div>
               )}
-              
+
               <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-3 sm:mb-4">
                 <span className={'px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-xs transition-all ' + (darkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-700')}>{article.category}</span>
                 {article.trending && <span className={'px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-xs flex items-center gap-1 animate-pulse ' + (darkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-700')}><TrendingUp className="w-2.5 h-2.5 sm:w-3 sm:h-3" />Hot</span>}
               </div>
-              
+
               <div className={'flex items-center justify-between gap-2 mb-3 sm:mb-4 pb-3 sm:pb-4 border-b ' + (darkMode ? 'border-gray-800' : 'border-gray-200')}>
                 {!article.archived ? (
                   <button onClick={() => archiveArticle(article.id)} className={'flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs transition-all hover:scale-105 ' + (darkMode ? 'bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20' : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100')}>
@@ -1125,30 +1218,17 @@ const App = () => {
         )}
       </main>
 
-      {/* Add CSS for animations */}
+      {/* Animations */}
       <style>{`
         @keyframes gradient {
           0%, 100% { background-position: 0% 50%; }
           50% { background-position: 100% 50%; }
         }
-        .animate-gradient {
-          background-size: 200% auto;
-          animation: gradient 3s ease infinite;
-        }
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        .animate-fadeIn {
-          animation: fadeIn 0.2s ease-out;
-        }
-        @keyframes slideUp {
-          from { transform: translateY(20px); opacity: 0; }
-          to { transform: translateY(0); opacity: 1; }
-        }
-        .animate-slideUp {
-          animation: slideUp 0.3s ease-out;
-        }
+        .animate-gradient { background-size: 200% auto; animation: gradient 3s ease infinite; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .animate-fadeIn { animation: fadeIn 0.2s ease-out; }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .animate-slideUp { animation: slideUp 0.3s ease-out; }
       `}</style>
     </div>
   );
