@@ -225,6 +225,14 @@ const App = () => {
       if (data.deletedArticles) localStorage.setItem('deletedArticles', JSON.stringify(data.deletedArticles));
       const manualArticles = (data.articles || []).filter(a => a.manual);
       if (manualArticles.length > 0) localStorage.setItem('manualArticles', JSON.stringify(manualArticles));
+      
+      // CRITICAL FIX: Update cachedArticles to include manual articles so they show immediately on reload
+      const cachedArticles = JSON.parse(localStorage.getItem('cachedArticles') || '[]');
+      const manualIds = new Set(manualArticles.map(a => a.id));
+      const cachedWithoutManual = cachedArticles.filter(a => !a.manual);
+      const updatedCache = [...manualArticles, ...cachedWithoutManual];
+      localStorage.setItem('cachedArticles', JSON.stringify(updatedCache));
+      
       setGistStatus('connected');
       setGistError('');
       alert('✅ Loaded from GitHub!');
