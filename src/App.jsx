@@ -3,10 +3,6 @@ import { Search, Filter, Bookmark, TrendingUp, Clock, ExternalLink, Moon, Sun, B
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 const App = () => {
-  // HARDCODED GIST CONFIGURATION - Articles will load automatically for everyone
-  const DEFAULT_GIST_ID = 'e89e6b358e664cc9bbe2ed4bd0233638';
-  const DEFAULT_GIST_USER = 'architeketh';
-  
   const [darkMode, setDarkMode] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -171,7 +167,7 @@ const App = () => {
       };
       const gistData = {
         description: 'AI Architecture Articles Backup',
-        public: true,
+        public: false,
         files: { 'ai-architecture-articles.json': { content: JSON.stringify(data, null, 2) } }
       };
       let response;
@@ -230,6 +226,7 @@ const App = () => {
       const manualArticles = (data.articles || []).filter(a => a.manual);
       if (manualArticles.length > 0) localStorage.setItem('manualArticles', JSON.stringify(manualArticles));
       
+      // CRITICAL FIX: Update cachedArticles to include manual articles so they show immediately on reload
       const cachedArticles = JSON.parse(localStorage.getItem('cachedArticles') || '[]');
       const manualIds = new Set(manualArticles.map(a => a.id));
       const cachedWithoutManual = cachedArticles.filter(a => !a.manual);
@@ -244,59 +241,6 @@ const App = () => {
       setGistStatus('error');
       setGistError(err.message);
       alert('❌ Error: ' + err.message);
-    }
-  };
-
-  // FIXED: Load from public gist without authentication - NOW INCLUDES ARCHIVED ARTICLES
-  const loadFromPublicGist = async () => {
-    try {
-      const response = await fetch(
-        `https://gist.githubusercontent.com/${DEFAULT_GIST_USER}/${DEFAULT_GIST_ID}/raw/ai-architecture-articles.json`
-      );
-      
-      if (!response.ok) throw new Error('Failed to load public gist');
-      
-      const data = await response.json();
-      
-      // Load ALL articles from the gist (including archived ones)
-      if (data.articles && data.articles.length > 0) {
-        const manualArticles = data.articles.filter(a => a.manual);
-        if (manualArticles.length > 0) {
-          localStorage.setItem('manualArticles', JSON.stringify(manualArticles));
-          console.log(`✅ Loaded ${manualArticles.length} manual articles from public gist`);
-        }
-        
-        const archivedArticles = data.articles.filter(a => a.archived);
-        if (archivedArticles.length > 0) {
-          localStorage.setItem('archivedArticles', JSON.stringify(archivedArticles));
-          console.log(`✅ Loaded ${archivedArticles.length} archived articles from public gist`);
-        }
-      }
-      
-      // Also load from the dedicated archivedArticles array if it exists
-      if (data.archivedArticles && data.archivedArticles.length > 0) {
-        const existingArchived = JSON.parse(localStorage.getItem('archivedArticles') || '[]');
-        const archivedIds = new Set(existingArchived.map(a => a.id));
-        
-        const newArchived = data.archivedArticles.filter(a => !archivedIds.has(a.id));
-        const mergedArchived = [...existingArchived, ...newArchived];
-        
-        localStorage.setItem('archivedArticles', JSON.stringify(mergedArchived));
-        console.log(`✅ Merged ${newArchived.length} additional archived articles (Total: ${mergedArchived.length})`);
-      }
-      
-      if (data.savedArticles) {
-        setSavedArticles(data.savedArticles);
-        localStorage.setItem('savedArticles', JSON.stringify(data.savedArticles));
-      }
-      
-      if (data.deletedArticles) {
-        localStorage.setItem('deletedArticles', JSON.stringify(data.deletedArticles));
-      }
-      
-      console.log('✅ Successfully loaded from public gist');
-    } catch (err) {
-      console.warn('Could not load from public gist:', err.message);
     }
   };
 
@@ -331,11 +275,14 @@ const App = () => {
   const categorizeArticle = (title, description, defaultCategory) => {
     const text = (title + ' ' + description).toLowerCase();
     
+    // Chat Engines - check first for specificity
     if (text.match(/chatgpt|gpt-4|gpt-3|claude|perplexity|gemini|bard|copilot|bing chat|llama/)) return 'Chat Engines';
     
+    // Residential vs Commercial
     if (text.match(/residential|house|home|apartment|villa|housing|single.family|multi.family/)) return 'Residential';
     if (text.match(/commercial|office|retail|hotel|restaurant|hospitality|workplace|corporate/)) return 'Commercial';
     
+    // More specific categorization
     if (text.match(/design process|workflow|collaboration|practice/)) return 'Design Process';
     if (text.match(/tool|software|app|platform|midjourney|dall-e|plugin|extension/)) return 'AI Tools';
     if (text.match(/machine learning|deep learning|neural network/)) return 'Machine Learning';
@@ -504,9 +451,6 @@ const App = () => {
       setLoading(true);
       setError(null);
       try {
-        // LOAD FROM PUBLIC GIST FIRST
-        await loadFromPublicGist();
-        
         const savedFeeds = localStorage.getItem('customFeeds');
         let feedsToFetch = DEFAULT_RSS_FEEDS;
         if (savedFeeds) {
@@ -586,20 +530,16 @@ const App = () => {
         allArticles.push(...manualArticles.filter(a => !deletedArticles.includes(a.id)));
         const combinedArticles = [...allArticles];
         const newArticleIds = new Set(allArticles.map(a => a.id));
-        
-        // CRITICAL: Add all archived articles
         archivedArticles.forEach(archived => {
           if (!newArticleIds.has(archived.id) && !deletedArticles.includes(archived.id)) {
             combinedArticles.push({ ...archived, archived: true });
           }
         });
-        
         combinedArticles.sort((a, b) => {
           if (a.archived !== b.archived) return a.archived ? 1 : -1;
           if (a.priority !== b.priority) return a.priority - b.priority;
           return b.date - a.date;
         });
-        
         setArticles(combinedArticles);
         localStorage.setItem('cachedArticles', JSON.stringify(combinedArticles));
         if (combinedArticles.length === 0) setError('No articles found. Try refreshing.');
@@ -685,6 +625,7 @@ const App = () => {
     const matchesCategory = selectedCategory === 'all' || article.category === selectedCategory;
     const matchesSource = selectedSource === 'all' || article.source === selectedSource;
     
+    // Check if article is from today
     const isNewToday = (() => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -703,6 +644,7 @@ const App = () => {
 
   const trendingCount = articles.filter(a => a.trending && !a.archived).length;
   
+  // Count articles added today
   const getArticlesAddedToday = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -742,7 +684,472 @@ const App = () => {
 
   return (
     <div className={'min-h-screen transition-all duration-500 ' + (darkMode ? 'bg-black' : 'bg-white')}>
-      <p>Note: The full JSX is too long for this artifact. Copy this file and add your complete JSX from the previous working version after the return statement.</p>
+      <input type="file" ref={fileInputRef} onChange={importData} accept=".json" style={{ display: 'none' }} />
+
+      {/* Feed Manager Modal */}
+      {showFeedManager && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50 animate-fadeIn" onClick={() => setShowFeedManager(false)}>
+          <div className={'max-w-4xl w-full rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-2xl animate-slideUp max-h-[90vh] overflow-y-auto ' + (darkMode ? 'bg-gradient-to-br from-gray-900 to-gray-800 border border-gray-700' : 'bg-white')} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sm:mb-6">
+              <h2 className={'text-lg sm:text-2xl font-bold flex items-center gap-2 sm:gap-3 bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent'}>
+                <Filter className="w-5 h-5 sm:w-7 sm:h-7 text-blue-500" />
+                RSS Feeds
+              </h2>
+              <button onClick={() => setShowFeedManager(false)} className="p-2 rounded-full hover:bg-gray-800 transition-all">
+                <X className="w-5 h-5 sm:w-6 sm:h-6" />
+              </button>
+            </div>
+            
+            <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row gap-2 sm:gap-3">
+              <button onClick={addFeed} className="px-4 sm:px-6 py-2 sm:py-3 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-600 hover:to-emerald-600 transition-all hover:scale-105 shadow-lg text-sm sm:text-base">+ Add Feed</button>
+              <button onClick={resetFeeds} className={'px-4 sm:px-6 py-2 sm:py-3 rounded-full transition-all hover:scale-105 text-sm sm:text-base ' + (darkMode ? 'bg-orange-500/10 text-orange-400 hover:bg-orange-500/20' : 'bg-orange-50 text-orange-700')}>Reset</button>
+            </div>
+
+            <div className="space-y-2 sm:space-y-3">
+              {(customFeeds.length > 0 ? customFeeds : DEFAULT_RSS_FEEDS).map((feed, index) => (
+                <div key={index} className={'p-3 sm:p-5 rounded-xl sm:rounded-2xl flex items-center justify-between transition-all hover:scale-[1.02] ' + (darkMode ? 'bg-gray-800/50 backdrop-blur-sm' : 'bg-gray-50')}>
+                  <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
+                    <span className="text-2xl sm:text-3xl flex-shrink-0">{feed.logo}</span>
+                    <div className="min-w-0 flex-1">
+                      <h3 className={'font-semibold text-sm sm:text-base truncate ' + (darkMode ? 'text-white' : 'text-gray-900')}>{feed.source}</h3>
+                      <p className={'text-xs truncate ' + (darkMode ? 'text-gray-500' : 'text-gray-600')}>{feed.category}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-1 sm:gap-2 flex-shrink-0">
+                    <button onClick={() => toggleFeed(index)} className={'px-2 sm:px-4 py-1 sm:py-2 rounded-full text-xs transition-all hover:scale-105 ' + (feed.enabled ? 'bg-green-500/20 text-green-400' : 'bg-gray-600 text-gray-400')}>
+                      {feed.enabled ? 'On' : 'Off'}
+                    </button>
+                    <button onClick={() => deleteFeed(index)} className="p-1 sm:p-2 rounded-full bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all">
+                      <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Gist Modal */}
+      {showGistSettings && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50 animate-fadeIn">
+          <div className={'max-w-2xl w-full rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-2xl animate-slideUp ' + (darkMode ? 'bg-gradient-to-br from-gray-900 to-gray-800 border border-gray-700' : 'bg-white')}>
+            <div className="flex items-center justify-between mb-4 sm:mb-6">
+              <h2 className={'text-lg sm:text-2xl font-bold flex items-center gap-2 sm:gap-3 bg-gradient-to-r from-blue-500 to-cyan-500 bg-clip-text text-transparent'}>
+                <Cloud className="w-5 h-5 sm:w-7 sm:h-7 text-blue-500" />
+                GitHub Sync
+              </h2>
+              <button onClick={() => setShowGistSettings(false)} className="p-2 rounded-full hover:bg-gray-800 transition-all">
+                <X className="w-5 h-5 sm:w-6 sm:h-6" />
+              </button>
+            </div>
+
+            <div className="mb-4 sm:mb-5">
+              <label className={'block text-xs sm:text-sm mb-2 ' + (darkMode ? 'text-gray-400' : 'text-gray-700')}>GitHub Token</label>
+              <input type="password" value={gistToken} onChange={(e) => setGistToken(e.target.value)} placeholder="ghp_..." className={'w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl sm:rounded-2xl transition-all focus:ring-2 focus:ring-blue-500 text-sm sm:text-base ' + (darkMode ? 'bg-gray-800 text-white border border-gray-700' : 'bg-gray-100')} />
+            </div>
+
+            <div className="mb-4 sm:mb-6">
+              <label className={'block text-xs sm:text-sm mb-2 ' + (darkMode ? 'text-gray-400' : 'text-gray-700')}>Gist ID (optional)</label>
+              <input type="text" value={gistId} onChange={(e) => setGistId(e.target.value)} placeholder="Leave blank for new" className={'w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl sm:rounded-2xl transition-all focus:ring-2 focus:ring-blue-500 text-sm sm:text-base ' + (darkMode ? 'bg-gray-800 text-white border border-gray-700' : 'bg-gray-100')} />
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+              <button onClick={saveGistSettings} disabled={!gistToken} className="flex-1 px-4 sm:px-6 py-2 sm:py-3 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600 disabled:opacity-50 transition-all hover:scale-105 shadow-lg text-sm sm:text-base">
+                Save
+              </button>
+              {gistStatus === 'connected' && (
+                <button onClick={disconnectGist} className="px-4 sm:px-6 py-2 sm:py-3 rounded-full bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all text-sm sm:text-base">Disconnect</button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Header */}
+      <div className={'sticky top-0 z-40 backdrop-blur-2xl border-b transition-all ' + (darkMode ? 'bg-black/80 border-gray-900' : 'bg-white/80 border-gray-100')}>
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8">
+          {/* Top Bar */}
+          <div className="flex items-center justify-between py-2 sm:py-4">
+            <button onClick={() => setDarkMode(!darkMode)} className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800' : 'bg-gray-100 hover:bg-gray-200')}>
+              {darkMode ? <Sun className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400" /> : <Moon className="w-4 h-4 sm:w-5 sm:h-5" />}
+            </button>
+            
+            <div className="flex items-center gap-1 sm:gap-2">
+              <button onClick={sendFeedback} className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-purple-400' : 'bg-gray-100 hover:bg-gray-200 text-purple-600')} title="Email Feedback">
+                <Mail className="w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
+              
+              <button onClick={() => setShowGistSettings(true)} className={'p-1.5 sm:p-2.5 rounded-full relative transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800' : 'bg-gray-100 hover:bg-gray-200') + ' ' + (gistStatus === 'connected' ? 'text-green-400' : 'text-gray-400')}>
+                {gistStatus === 'connected' ? <Cloud className="w-4 h-4 sm:w-5 sm:h-5" /> : <CloudOff className="w-4 h-4 sm:w-5 sm:h-5" />}
+                {gistStatus === 'syncing' && <span className="absolute top-0 right-0 w-1.5 h-1.5 sm:w-2 sm:h-2 bg-blue-500 rounded-full animate-ping"></span>}
+              </button>
+              
+              <div className="relative">
+                <button onClick={() => setShowExportMenu(!showExportMenu)} className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-purple-400' : 'bg-gray-100 hover:bg-gray-200 text-purple-600')}>
+                  <Database className="w-4 h-4 sm:w-5 sm:h-5" />
+                </button>
+                {showExportMenu && (
+                  <div className={'absolute right-0 mt-2 w-48 sm:w-56 rounded-xl sm:rounded-2xl shadow-2xl p-2 z-50 animate-slideUp ' + (darkMode ? 'bg-gray-900 border border-gray-800' : 'bg-white')}>
+                    <div className={'text-xs font-semibold mb-2 px-3 pt-2 ' + (darkMode ? 'text-gray-500' : 'text-gray-500')}>EXPORT</div>
+                    <button onClick={() => exportData('all')} className={'w-full flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-left transition-all hover:scale-[1.02] ' + (darkMode ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100')}>
+                      <Download className="w-3 h-3 sm:w-4 sm:h-4" />
+                      <span className="text-xs sm:text-sm">Complete Backup</span>
+                    </button>
+                    <button onClick={() => exportData('archived')} className={'w-full flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-left transition-all hover:scale-[1.02] ' + (darkMode ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100')}>
+                      <Download className="w-3 h-3 sm:w-4 sm:h-4" />
+                      <span className="text-xs sm:text-sm">Archived Only</span>
+                    </button>
+                    <button onClick={() => exportData('saved')} className={'w-full flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-left transition-all hover:scale-[1.02] ' + (darkMode ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100')}>
+                      <Download className="w-3 h-3 sm:w-4 sm:h-4" />
+                      <span className="text-xs sm:text-sm">Saved Only</span>
+                    </button>
+                    <div className={'text-xs font-semibold my-2 px-3 pt-2 border-t ' + (darkMode ? 'text-gray-500 border-gray-800' : 'text-gray-500 border-gray-200')}>IMPORT</div>
+                    <button onClick={() => fileInputRef.current?.click()} className={'w-full flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-left transition-all hover:scale-[1.02] ' + (darkMode ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100')}>
+                      <Upload className="w-3 h-3 sm:w-4 sm:h-4" />
+                      <span className="text-xs sm:text-sm">Import from File</span>
+                    </button>
+                    {gistId && (
+                      <button onClick={() => { loadFromGist(); setShowExportMenu(false); }} className={'w-full flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-left transition-all hover:scale-[1.02] ' + (darkMode ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100')}>
+                        <Cloud className="w-3 h-3 sm:w-4 sm:h-4" />
+                        <span className="text-xs sm:text-sm">Load from GitHub</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+              
+              <button onClick={() => window.location.reload()} className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-green-400' : 'bg-gray-100 hover:bg-gray-200 text-green-600')}>
+                <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
+              
+              <button onClick={() => setShowChart(!showChart)} className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-blue-400' : 'bg-gray-100 hover:bg-gray-200 text-blue-600')}>
+                <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
+              
+              <button onClick={() => setShowFeedStatus(!showFeedStatus)} className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-cyan-400' : 'bg-gray-100 hover:bg-gray-200 text-cyan-600')}>
+                <Settings className="w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
+              
+              <button onClick={handleOpenFeedManager} className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-purple-400' : 'bg-gray-100 hover:bg-gray-200 text-purple-600')}>
+                <Filter className="w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Hero Section with Gradient */}
+          <div className="text-center py-6 sm:py-12">
+            <div className="relative inline-block">
+              <h1 className={'text-3xl sm:text-5xl md:text-7xl font-bold mb-2 sm:mb-4 tracking-tight bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 bg-clip-text text-transparent animate-gradient'}>
+                AI in Architecture
+              </h1>
+              <div className="absolute -inset-2 sm:-inset-4 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 opacity-20 blur-3xl -z-10"></div>
+            </div>
+            <p className={'text-sm sm:text-lg md:text-xl font-light mb-2 ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
+              Discover the latest innovations shaping design
+            </p>
+            <div className={'flex items-center justify-center gap-2 sm:gap-4 text-xs sm:text-sm flex-wrap px-2 ' + (darkMode ? 'text-gray-500' : 'text-gray-500')}>
+              {newTodayCount > 0 && (
+                <>
+                  <span className="flex items-center gap-1 px-2 sm:px-3 py-1 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold animate-pulse">
+                    <Sparkles className="w-3 h-3 sm:w-4 sm:h-4" />
+                    <span className="whitespace-nowrap">{newTodayCount} new today</span>
+                  </span>
+                  <span className="hidden sm:inline">•</span>
+                </>
+              )}
+              <span className="flex items-center gap-1">
+                <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 text-blue-500" />
+                {articles.filter(a => !a.archived).length}
+              </span>
+              <span className="hidden sm:inline">•</span>
+              <span className="flex items-center gap-1">
+                <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4 text-orange-500" />
+                {trendingCount}
+              </span>
+              <span className="hidden sm:inline">•</span>
+              <span className="flex items-center gap-1">
+                <Heart className="w-3 h-3 sm:w-4 sm:h-4 text-pink-500" />
+                {savedArticles.length}
+              </span>
+              {viewCount && (
+                <>
+                  <span className="hidden sm:inline">•</span>
+                  <span>👁️ {viewCount.toLocaleString()}</span>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Tabs with Gradient Active State */}
+          <div className="flex gap-1.5 sm:gap-2 mb-4 sm:mb-6 overflow-x-auto pb-2">
+            <button onClick={() => { setActiveTab('all'); setShowOnlyNewToday(false); }} className={'px-3 sm:px-6 py-1.5 sm:py-2.5 rounded-full font-medium transition-all hover:scale-105 text-xs sm:text-base whitespace-nowrap ' + (activeTab === 'all' ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg' : (darkMode ? 'bg-gray-900 text-gray-400 hover:bg-gray-800' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'))}>
+              Recent ({articles.filter(a => !a.archived).length})
+            </button>
+            <button onClick={() => { setActiveTab('saved'); setShowOnlyNewToday(false); }} className={'px-3 sm:px-6 py-1.5 sm:py-2.5 rounded-full font-medium flex items-center gap-1 sm:gap-2 transition-all hover:scale-105 whitespace-nowrap text-xs sm:text-base ' + (activeTab === 'saved' ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-lg' : (darkMode ? 'bg-gray-900 text-gray-400 hover:bg-gray-800' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'))}>
+              <Heart className="w-3 h-3 sm:w-4 sm:h-4" fill={activeTab === 'saved' ? 'currentColor' : 'none'} />
+              Saved ({savedArticles.length})
+            </button>
+            <button onClick={() => { setActiveTab('archive'); setShowOnlyNewToday(false); }} className={'px-3 sm:px-6 py-1.5 sm:py-2.5 rounded-full font-medium flex items-center gap-1 sm:gap-2 transition-all hover:scale-105 whitespace-nowrap text-xs sm:text-base ' + (activeTab === 'archive' ? 'bg-gradient-to-r from-orange-500 to-yellow-500 text-white shadow-lg' : (darkMode ? 'bg-gray-900 text-gray-400 hover:bg-gray-800' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'))}>
+              <Archive className="w-3 h-3 sm:w-4 sm:h-4" />
+              Archive ({archivedArticles.length})
+            </button>
+          </div>
+
+          {/* Search with Gradient Border */}
+          <div className="relative mb-4 sm:mb-6">
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full opacity-20 blur-sm"></div>
+            <div className="relative">
+              <Search className={'absolute left-3 sm:left-5 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 ' + (darkMode ? 'text-gray-600' : 'text-gray-400')} />
+              <input type="text" placeholder="Search articles..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className={'w-full pl-10 sm:pl-14 pr-20 sm:pr-40 py-2.5 sm:py-4 rounded-full focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all text-sm sm:text-base ' + (darkMode ? 'bg-gray-900 text-white border border-gray-800' : 'bg-gray-50 border border-gray-200')} />
+              <button onClick={addArticleByURL} className="absolute right-1 sm:right-2 top-1/2 -translate-y-1/2 px-3 sm:px-6 py-1 sm:py-2 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 transition-all hover:scale-105 shadow-lg text-xs sm:text-base">
+                + Add
+              </button>
+            </div>
+          </div>
+
+          {/* Category Pills with Hover Effects */}
+          <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-4 sm:pb-6">
+            <button onClick={() => setShowFilters(!showFilters)} className={'flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-full transition-all hover:scale-105 text-xs sm:text-sm whitespace-nowrap ' + (darkMode ? 'bg-gray-900 text-gray-400 hover:bg-gray-800' : 'bg-gray-100 hover:bg-gray-200')}>
+              <Filter className="w-3 h-3 sm:w-4 sm:h-4" />Filters
+            </button>
+            {activeTab === 'all' && newTodayCount > 0 && (
+              <button onClick={() => setShowOnlyNewToday(!showOnlyNewToday)} className={'flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-full transition-all hover:scale-105 text-xs sm:text-sm whitespace-nowrap ' + (showOnlyNewToday ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg' : (darkMode ? 'bg-gray-900 text-gray-400 hover:bg-gray-800' : 'bg-gray-100 hover:bg-gray-200'))}>
+                <Sparkles className="w-3 h-3 sm:w-4 sm:h-4" />
+                New Today ({newTodayCount})
+              </button>
+            )}
+            {activeCategories.slice(0, 8).map(cat => (
+              <button key={cat} onClick={() => setSelectedCategory(cat)} className={'px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-full text-xs sm:text-sm font-medium whitespace-nowrap transition-all hover:scale-105 ' + (selectedCategory === cat ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg' : (darkMode ? 'bg-gray-900 text-gray-400 hover:bg-gray-800' : 'bg-gray-100 hover:bg-gray-200'))}>
+                {cat === 'all' ? 'All' : cat}
+              </button>
+            ))}
+          </div>
+
+          {showFilters && (
+            <div className={'mb-4 sm:mb-6 p-3 sm:p-6 rounded-2xl sm:rounded-3xl backdrop-blur-sm ' + (darkMode ? 'bg-gray-900/50 border border-gray-800' : 'bg-gray-50 border border-gray-200')}>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
+                <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className={'w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl sm:rounded-2xl transition-all focus:ring-2 focus:ring-purple-500 text-sm sm:text-base ' + (darkMode ? 'bg-gray-800 text-white border border-gray-700' : 'bg-white border border-gray-200')}>
+                  {categories.map(cat => <option key={cat} value={cat}>{cat === 'all' ? 'All' : cat}</option>)}
+                </select>
+                <select value={selectedSource} onChange={(e) => setSelectedSource(e.target.value)} className={'w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl sm:rounded-2xl transition-all focus:ring-2 focus:ring-purple-500 text-sm sm:text-base ' + (darkMode ? 'bg-gray-800 text-white border border-gray-700' : 'bg-white border border-gray-200')}>
+                  {sources.map(s => {
+                    if (s === '---') return <option key="separator" disabled>────────────</option>;
+                    return <option key={s} value={s}>{s === 'all' ? 'All Sources' : s}</option>;
+                  })}
+                </select>
+                <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className={'w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl sm:rounded-2xl transition-all focus:ring-2 focus:ring-purple-500 text-sm sm:text-base ' + (darkMode ? 'bg-gray-800 text-white border border-gray-700' : 'bg-white border border-gray-200')}>
+                  <option value="date">Latest</option>
+                  <option value="trending">Trending</option>
+                </select>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Main */}
+      <main className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-8">
+        {showFeedStatus && (
+          <div className={'mb-6 sm:mb-8 p-4 sm:p-6 rounded-2xl sm:rounded-3xl border backdrop-blur-sm ' + (darkMode ? 'bg-gray-900/50 border-gray-800' : 'bg-white border-gray-200')}>
+            <div className="flex items-center justify-between mb-4 sm:mb-6">
+              <h2 className={'text-base sm:text-xl font-bold flex items-center gap-2 sm:gap-3 ' + (darkMode ? 'text-white' : 'text-gray-900')}>
+                <Settings className="w-5 h-5 sm:w-6 sm:h-6 text-cyan-500" />
+                Feed Status
+              </h2>
+              <button onClick={() => setShowFeedStatus(false)} className={'text-xs sm:text-sm ' + (darkMode ? 'text-gray-500 hover:text-gray-400' : 'text-gray-600 hover:text-gray-700')}>Hide</button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+              {RSS_FEEDS.map((feed) => {
+                const info = feedStatus[feed.source] || { status: 'pending', count: 0 };
+                return (
+                  <div key={feed.source} className={'p-3 sm:p-4 rounded-xl sm:rounded-2xl transition-all hover:scale-[1.02] ' + (darkMode ? 'bg-gray-800/50' : 'bg-gray-50')}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={'font-semibold text-xs sm:text-sm ' + (darkMode ? 'text-white' : 'text-gray-900')}>{feed.source}</span>
+                      {info.status === 'success' ? (
+                        <span className="px-2 sm:px-3 py-1 rounded-full text-xs bg-green-500/20 text-green-400">✓</span>
+                      ) : (
+                        <span className="px-2 sm:px-3 py-1 rounded-full text-xs bg-red-500/20 text-red-400">✗</span>
+                      )}
+                    </div>
+                    <p className={'text-xs ' + (darkMode ? 'text-gray-400' : 'text-gray-600')}>
+                      {info.status === 'success' ? `Fetched: ${info.totalFetched} → Filtered: ${info.count}` : 'Failed'}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'saved' && savedArticles.length === 0 && (
+          <div className={'text-center py-16 sm:py-24 ' + (darkMode ? 'text-gray-500' : 'text-gray-400')}>
+            <Heart className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-4 sm:mb-6 opacity-30" />
+            <p className="text-lg sm:text-2xl font-light">No saved articles</p>
+          </div>
+        )}
+
+        {activeTab === 'archive' && archivedArticles.length === 0 && (
+          <div className={'text-center py-16 sm:py-24 ' + (darkMode ? 'text-gray-500' : 'text-gray-400')}>
+            <Archive className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-4 sm:mb-6 opacity-30" />
+            <p className="text-lg sm:text-2xl font-light">No archived articles</p>
+          </div>
+        )}
+
+        {activeTab === 'all' && showChart && chartData.length > 0 && (
+          <div className={'mb-6 sm:mb-8 p-4 sm:p-6 rounded-2xl sm:rounded-3xl border backdrop-blur-sm ' + (darkMode ? 'bg-gray-900/50 border-gray-800' : 'bg-white border-gray-200')}>
+            <div className="flex items-center justify-between mb-4 sm:mb-6">
+              <h2 className={'text-base sm:text-xl font-bold ' + (darkMode ? 'text-white' : 'text-gray-900')}>Categories</h2>
+              <button onClick={() => setShowChart(false)} className={'text-xs sm:text-sm ' + (darkMode ? 'text-gray-500 hover:text-gray-400' : 'text-gray-600 hover:text-gray-700')}>Hide</button>
+            </div>
+            <ResponsiveContainer width="100%" height={chartData.length * 25 + 40}>
+              <BarChart data={chartData} layout="vertical" barCategoryGap={1}>
+                <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? '#1f2937' : '#f3f4f6'} />
+                <XAxis type="number" tick={{ fill: darkMode ? '#6b7280' : '#9ca3af', fontSize: 10 }} />
+                <YAxis type="category" dataKey="name" width={120} tick={{ fill: darkMode ? '#9ca3af' : '#6b7280', fontSize: 10 }} />
+                <Tooltip contentStyle={{ backgroundColor: darkMode ? '#111827' : '#ffffff', borderRadius: '12px', fontSize: '11px', border: 'none', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }} />
+                <Bar dataKey="count" radius={[0, 6, 6, 0]} barSize={6}>
+                  {chartData.map((entry, index) => <Cell key={index} fill={colors[index % colors.length]} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {activeTab === 'archive' && showArchiveChart && archiveChartData.length > 0 && (
+          <div className={'mb-6 sm:mb-8 p-4 sm:p-6 rounded-2xl sm:rounded-3xl border backdrop-blur-sm ' + (darkMode ? 'bg-gray-900/50 border-gray-800' : 'bg-white border-gray-200')}>
+            <div className="flex items-center justify-between mb-4 sm:mb-6">
+              <h2 className={'text-base sm:text-xl font-bold flex items-center gap-2 sm:gap-3 ' + (darkMode ? 'text-white' : 'text-gray-900')}>
+                <Archive className="w-5 h-5 sm:w-6 sm:h-6 text-orange-500" />
+                Archived
+              </h2>
+              <button onClick={() => setShowArchiveChart(false)} className={'text-xs sm:text-sm ' + (darkMode ? 'text-gray-500 hover:text-gray-400' : 'text-gray-600 hover:text-gray-700')}>Hide</button>
+            </div>
+            <ResponsiveContainer width="100%" height={archiveChartData.length * 25 + 40}>
+              <BarChart data={archiveChartData} layout="vertical" barCategoryGap={1}>
+                <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? '#1f2937' : '#f3f4f6'} />
+                <XAxis type="number" tick={{ fill: darkMode ? '#6b7280' : '#9ca3af', fontSize: 10 }} />
+                <YAxis type="category" dataKey="name" width={120} tick={{ fill: darkMode ? '#9ca3af' : '#6b7280', fontSize: 10 }} />
+                <Tooltip contentStyle={{ backgroundColor: darkMode ? '#111827' : '#ffffff', borderRadius: '12px', fontSize: '11px', border: 'none', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }} />
+                <Bar dataKey="count" radius={[0, 6, 6, 0]} barSize={6}>
+                  {archiveChartData.map((entry, index) => <Cell key={index} fill={colors[index % colors.length]} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {/* Articles - Mobile optimized cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5">
+          {filteredArticles.map(article => (
+            <article key={article.id} className={'group rounded-2xl sm:rounded-3xl p-3 sm:p-5 border transition-all hover:shadow-2xl hover:-translate-y-1 ' + (darkMode ? 'bg-gradient-to-br from-gray-900 to-gray-800 border-gray-800 hover:border-gray-700' : 'bg-white border-gray-200 hover:border-gray-300')}>
+              <div className="flex items-start justify-between mb-2 sm:mb-3">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <span className="text-base sm:text-xl">{article.sourceLogo}</span>
+                  <span className={'text-xs ' + (darkMode ? 'text-gray-500' : 'text-gray-600')}>{article.source}</span>
+                </div>
+                <button onClick={() => toggleSave(article.id)} className={'relative transition-all hover:scale-110 ' + (savedArticles.includes(article.id) ? 'text-yellow-500' : (darkMode ? 'text-gray-600' : 'text-gray-400'))}>
+                  <Bookmark className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill={savedArticles.includes(article.id) ? 'currentColor' : 'none'} />
+                </button>
+              </div>
+              
+              {(article.archived || article.manual) && (
+                <div className="flex gap-1.5 sm:gap-2 mb-2 sm:mb-3">
+                  {article.archived && (
+                    <div className={'px-2 py-0.5 sm:py-1 rounded-full text-xs ' + (darkMode ? 'bg-gray-800 text-gray-500' : 'bg-gray-100')}>
+                      <Archive className="w-2.5 h-2.5 sm:w-3 sm:h-3 inline mr-1" />
+                      Archived
+                    </div>
+                  )}
+                  {article.manual && (
+                    <div className="px-2 py-0.5 sm:py-1 rounded-full text-xs bg-green-500/20 text-green-400">
+                      ✓ Manual
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              <h2 className={'text-sm sm:text-base font-bold mb-2 sm:mb-3 line-clamp-2 group-hover:bg-gradient-to-r group-hover:from-blue-500 group-hover:to-purple-500 group-hover:bg-clip-text group-hover:text-transparent transition-all ' + (darkMode ? 'text-white' : 'text-gray-900')}>{article.title}</h2>
+              <p className={'text-xs mb-2 sm:mb-3 line-clamp-2 ' + (darkMode ? 'text-gray-500' : 'text-gray-600')}>{article.summary}</p>
+              
+              {article.keywords.length > 0 && (
+                <div className="flex flex-wrap gap-1 sm:gap-1.5 mb-2 sm:mb-3">
+                  {article.keywords.slice(0, 3).map((kw, i) => <span key={i} className={'px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-xs transition-all hover:scale-105 ' + (darkMode ? 'bg-gray-800 text-gray-400 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200')}>{kw}</span>)}
+                </div>
+              )}
+              
+              <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-3 sm:mb-4">
+                <span className={'px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-xs transition-all ' + (darkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-700')}>{article.category}</span>
+                {article.trending && <span className={'px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-xs flex items-center gap-1 animate-pulse ' + (darkMode ? 'bg-orange-500/10 text-orange-400' : 'bg-orange-50 text-orange-700')}><TrendingUp className="w-2.5 h-2.5 sm:w-3 sm:h-3" />Hot</span>}
+              </div>
+              
+              <div className={'flex items-center justify-between gap-2 mb-3 sm:mb-4 pb-3 sm:pb-4 border-b ' + (darkMode ? 'border-gray-800' : 'border-gray-200')}>
+                {!article.archived ? (
+                  <button onClick={() => archiveArticle(article.id)} className={'flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs transition-all hover:scale-105 ' + (darkMode ? 'bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20' : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100')}>
+                    <Archive className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                    Archive
+                  </button>
+                ) : (
+                  <button onClick={() => restoreArticle(article.id)} className={'flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs transition-all hover:scale-105 ' + (darkMode ? 'bg-green-500/10 text-green-400 hover:bg-green-500/20' : 'bg-green-50 text-green-700 hover:bg-green-100')}>
+                    <ArchiveRestore className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                    Restore
+                  </button>
+                )}
+                <button onClick={() => deleteArticle(article.id)} className={'flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs transition-all hover:scale-105 ' + (darkMode ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20' : 'bg-red-50 text-red-700 hover:bg-red-100')}>
+                  <Trash2 className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                  Delete
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 sm:gap-3 text-xs">
+                  <span className={'flex items-center gap-1 ' + (darkMode ? 'text-gray-600' : 'text-gray-500')}><Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3" />{article.readTime}m</span>
+                  <span className={'flex items-center gap-1 ' + (darkMode ? 'text-gray-600' : 'text-gray-500')}>
+                    <Calendar className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                    {activeTab === 'archive' ? new Date(article.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : getRelativeTime(article.date)}
+                  </span>
+                </div>
+                <a href={article.url} target="_blank" rel="noopener noreferrer" className={'flex items-center gap-1 text-xs transition-all hover:scale-105 ' + (darkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700')}>
+                  Read<ExternalLink className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                </a>
+              </div>
+            </article>
+          ))}
+        </div>
+
+        {filteredArticles.length === 0 && (
+          <div className={'text-center py-16 sm:py-24 ' + (darkMode ? 'text-gray-500' : 'text-gray-400')}>
+            <Building2 className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-4 sm:mb-6 opacity-30" />
+            <p className="text-lg sm:text-2xl font-light">No articles found</p>
+          </div>
+        )}
+      </main>
+
+      {/* Add CSS for animations */}
+      <style>{`
+        @keyframes gradient {
+          0%, 100% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+        }
+        .animate-gradient {
+          background-size: 200% auto;
+          animation: gradient 3s ease infinite;
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.2s ease-out;
+        }
+        @keyframes slideUp {
+          from { transform: translateY(20px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+        .animate-slideUp {
+          animation: slideUp 0.3s ease-out;
+        }
+      `}</style>
     </div>
   );
 };
