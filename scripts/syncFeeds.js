@@ -1,25 +1,26 @@
-// Node 18+/20+
-// Syncs RSS into your Gist without touching saved/archived/deleted arrays.
-// It merges new articles by id and preserves existing fields.
+// scripts/syncFeeds.js
+// Node 18+/20+ (ESM)
+//
+// Env vars required (set via GitHub Actions secrets or your shell):
+//   GIST_ID     = e.g. "e89e6b358e664cc9bbe2ed4bd0233638"
+//   GIST_TOKEN  = classic PAT with "gist" scope
+// Optional:
+//   GIST_FILE   = filename inside the Gist (default: ai-architecture-articles.json)
 
-// ---- config ----
-const GIST_ID  = process.env.GIST_ID;
+import Parser from 'rss-parser';
+import fetch from 'node-fetch';
+
+// ---- env ----
+const GIST_ID   = process.env.GIST_ID;
 const GIST_TOKEN = process.env.GIST_TOKEN;
-const GIST_FILE = process.env.GIST_FILE || 'ai-architecture-articles.json';
+const GIST_FILE  = process.env.GIST_FILE || 'ai-architecture-articles.json';
 
 if (!GIST_ID || !GIST_TOKEN) {
   console.error('Missing GIST_ID or GIST_TOKEN env vars.');
   process.exit(1);
 }
 
-import Parser from 'rss-parser';
-import fetch from 'node-fetch';
-
-const parser = new Parser({
-  timeout: 15000,
-  headers: { 'User-Agent': 'rss-sync/1.0 (+github action)' },
-});
-
+// ---- feed list (matches client defaults) ----
 const FEEDS = [
   { url: 'https://www.archdaily.com/feed', category: 'Architecture News', source: 'ArchDaily', logo: '🏛️', priority: 1, requireBoth: true },
   { url: 'https://www.dezeen.com/feed/', category: 'Design Innovation', source: 'Dezeen', logo: '📐', priority: 1, requireBoth: true },
@@ -29,9 +30,15 @@ const FEEDS = [
   { url: 'https://www.architecturaldigest.com/feed/rss', category: 'Design & Architecture', source: 'Architectural Digest', logo: '🏠', priority: 1, requireBoth: false }
 ];
 
-// ---- helpers (mirror client logic) ----
-function categorize(title, desc, fallback) {
-  const t = (title + ' ' + desc).toLowerCase();
+// ---- parser ----
+const parser = new Parser({
+  timeout: 15000, // ms; tighten if needed
+  headers: { 'User-Agent': 'ai-arch-rss-sync/1.0 (+github action)' },
+});
+
+// ---- helpers mirroring client logic ----
+function categorize(title, description, fallback) {
+  const t = (title + ' ' + (description || '')).toLowerCase();
   if (/(chatgpt|gpt-4|gpt-3|claude|perplexity|gemini|bard|copilot|bing chat|llama)/i.test(t)) return 'Chat Engines';
   if (/(residential|house|home|apartment|villa|housing|single.family|multi.family)/i.test(t)) return 'Residential';
   if (/(commercial|office|retail|hotel|restaurant|hospitality|workplace|corporate)/i.test(t)) return 'Commercial';
@@ -51,7 +58,7 @@ function categorize(title, desc, fallback) {
   return fallback;
 }
 
-function extractKeywords(text) {
+function extractKeywords(text = '') {
   const groups = {
     'midjourney': ['midjourney'],
     'stable diffusion': ['stable diffusion'],
@@ -70,28 +77,135 @@ function extractKeywords(text) {
   const t = text.toLowerCase();
   const found = [];
   for (const [label, keys] of Object.entries(groups)) {
-    if (keys.some(kw => new RegExp(kw,'i').test(t))) found.push(label);
+    if (keys.some(kw => new RegExp(kw, 'i').test(t))) found.push(label);
   }
-  return found.slice(0,4);
+  return found.slice(0, 4);
 }
 
-function cleanHtml(s='') { return s.replace(/<[^>]*>/g,''); }
+function cleanHtml(s = '') {
+  return s.replace(/<[^>]*>/g, '');
+}
 
-function mergeById(primary=[], secondary=[]) {
+function mergeById(primary = [], secondary = []) {
+  // Later wins; we pass fetched as primary to prefer fresh titles/summaries/dates.
   const m = new Map();
   [...secondary, ...primary].forEach(a => { if (a?.id) m.set(a.id, a); });
   return [...m.values()];
 }
 
-// ---- load existing gist ----
+// ---- robust RSS fetching (with fallbacks) ----
+async function fetchText(url, headers = {}) {
+  const res = await fetch(url, { headers });
+  if (!res.ok) {
+    const err = new Error(`Status code ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
+  return await res.text();
+}
+
+async function tryFeed2Json(url) {
+  const proxy = `https://feed2json.org/convert?url=${encodeURIComponent(url)}`;
+  const res = await fetch(proxy);
+  if (!res.ok) throw new Error(`feed2json status ${res.status}`);
+  const data = await res.json();
+  const items = Array.isArray(data.items) ? data.items : [];
+  // Normalize to a minimal shape rss-parser understands
+  return items.map(it => ({
+    title: it.title,
+    link: it.url,
+    guid: it.id,
+    content: it.content_html || it.summary || '',
+    isoDate: it.date_published || it.date_modified
+  }));
+}
+
+function mapItems(items, feed) {
+  return (items || [])
+    .filter(item => {
+      const title = item.title || '';
+      const desc  = item.contentSnippet || item.content || item.summary || '';
+      const text  = (title + ' ' + desc).toLowerCase();
+      const hasAI = /\b(ai|artificial intelligence|machine learning|generative|parametric|computational|midjourney|chatgpt|render.*ai|ai.*render|algorithm|neural)\b/i.test(text);
+      const hasArch = /\b(architect|design|building|construction|render|rendering|visualization|bim|3d.*model|structure|spatial)\b/i.test(text);
+      const hasRendering = /\b(midjourney|dall-e|lookx|veras|enscape|lumion|twinmotion|render|rendering|visualization|photorealistic)\b/i.test(text);
+      if (hasRendering) return true;
+      return feed.requireBoth ? (hasAI && hasArch) : (hasAI || hasArch);
+    })
+    .map(item => {
+      const title = item.title || 'Untitled';
+      const desc  = item.contentSnippet || item.content || item.summary || '';
+      const clean = cleanHtml(desc).slice(0, 200);
+      const stableId = item.link || item.guid || (feed.source + '-' + title.replace(/\W/g, '').slice(0, 30));
+      return {
+        id: stableId,
+        title,
+        source: feed.source,
+        sourceLogo: feed.logo,
+        category: categorize(title, desc, feed.category),
+        date: item.isoDate || item.pubDate || new Date().toISOString(),
+        readTime: 5,
+        summary: clean ? (clean + '...') : '...',
+        url: item.link || '#',
+        trending: Math.random() > 0.75,
+        keywords: extractKeywords(title + ' ' + desc),
+        priority: feed.priority,
+        archived: false,
+        manual: false
+      };
+    });
+}
+
+async function fetchAll() {
+  const tasks = FEEDS.map(async (feed) => {
+    // 1) Normal path: parser.parseURL
+    try {
+      const parsed = await parser.parseURL(feed.url);
+      const out = mapItems(parsed.items || [], feed);
+      console.log(`✓ ${feed.source}: ${out.length}`);
+      return out;
+    } catch (e1) {
+      // 2) Fallback: feed2json
+      try {
+        if (e1?.status === 403 || /403/.test(String(e1))) {
+          const items = await tryFeed2Json(feed.url);
+          const out = mapItems(items, feed);
+          console.log(`✓ (feed2json) ${feed.source}: ${out.length}`);
+          return out;
+        }
+      } catch (e2) {
+        // 3) Final fallback: raw XML + parseString
+        try {
+          const xml = await fetchText(feed.url, { 'User-Agent': 'ai-arch-rss-sync/1.0 (+github action)' });
+          const parsed2 = await parser.parseString(xml);
+          const out = mapItems(parsed2.items || [], feed);
+          console.log(`✓ (xml) ${feed.source}: ${out.length}`);
+          return out;
+        } catch (e3) {
+          console.warn('Feed error:', feed.source, e3.message || e3);
+          return [];
+        }
+      }
+      console.warn('Feed error:', feed.source, e1.message || e1);
+      return [];
+    }
+  });
+
+  const results = await Promise.all(tasks);
+  return results.flat();
+}
+
+// ---- gist I/O ----
 async function loadGist() {
-  const metaRes = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+  const res = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
     headers: { Authorization: `Bearer ${GIST_TOKEN}` }
   });
-  if (!metaRes.ok) throw new Error(`Gist fetch failed: ${metaRes.status}`);
-  const meta = await metaRes.json();
+  if (!res.ok) throw new Error(`Gist fetch failed: ${res.status}`);
+  const meta = await res.json();
   const file = meta.files?.[GIST_FILE];
-  if (!file?.content) return { articles: [], savedArticles: [], archivedArticles: [], deletedArticles: [] };
+  if (!file?.content) {
+    return { articles: [], savedArticles: [], archivedArticles: [], deletedArticles: [] };
+  }
   const json = JSON.parse(file.content);
   return {
     articles: Array.isArray(json.articles) ? json.articles : [],
@@ -101,65 +215,36 @@ async function loadGist() {
   };
 }
 
-// ---- fetch all feeds ----
-async function fetchAll() {
-  const out = [];
-  for (const feed of FEEDS) {
-    try {
-      const parsed = await parser.parseURL(feed.url);
-      const items = parsed.items || [];
-      const filtered = items
-        .filter(item => {
-          const title = item.title || '';
-          const desc  = item.contentSnippet || item.content || item.summary || item.contentSnippet || '';
-          const text  = (title + ' ' + desc).toLowerCase();
-          const hasAI = /\b(ai|artificial intelligence|machine learning|generative|parametric|computational|midjourney|chatgpt|render.*ai|ai.*render|algorithm|neural)\b/i.test(text);
-          const hasArch = /\b(architect|design|building|construction|render|rendering|visualization|bim|3d.*model|structure|spatial)\b/i.test(text);
-          const hasRendering = /\b(midjourney|dall-e|lookx|veras|enscape|lumion|twinmotion|render|rendering|visualization|photorealistic)\b/i.test(text);
-          if (hasRendering) return true;
-          return feed.requireBoth ? (hasAI && hasArch) : (hasAI || hasArch);
-        })
-        .map(item => {
-          const title = item.title || 'Untitled';
-          const desc  = item.contentSnippet || item.content || item.summary || '';
-          const clean = cleanHtml(desc).slice(0,200);
-          const stableId = item.link || item.guid || (feed.source + '-' + title.replace(/\W/g,'').slice(0,30));
-          return {
-            id: stableId,
-            title,
-            source: feed.source,
-            sourceLogo: feed.logo,
-            category: categorize(title, desc, feed.category),
-            date: item.isoDate || item.pubDate || new Date().toISOString(),
-            readTime: 5,
-            summary: (clean + '...'),
-            url: item.link || '#',
-            trending: Math.random() > 0.75,
-            keywords: extractKeywords(title + ' ' + desc),
-            priority: feed.priority,
-            archived: false,
-            manual: false
-          };
-        });
-      out.push(...filtered);
-    } catch (e) {
-      console.warn('Feed error:', feed.source, e.message || e);
-    }
-  }
-  return out;
+async function saveGist(payload) {
+  const body = {
+    description: 'AI Architecture Articles Backup',
+    public: true, // your gist is public; adjust if you switch to private
+    files: { [GIST_FILE]: { content: JSON.stringify(payload, null, 2) } }
+  };
+
+  const res = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${GIST_TOKEN}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!res.ok) throw new Error(`Gist update failed: ${res.status}`);
 }
 
 // ---- main ----
 (async () => {
   try {
     const existing = await loadGist();
-    const fetched = await fetchAll();
+    const fetched  = await fetchAll();
 
     // Honor deletions: never re-add deleted ids
     const deletedSet = new Set(existing.deletedArticles || []);
     const filteredFetched = fetched.filter(a => !deletedSet.has(a.id));
 
-    // Merge (prefer fetched for fresh title/summary/date)
+    // Merge by id (prefer fetched for freshness)
     const mergedArticles = mergeById(filteredFetched, existing.articles || []);
 
     const payload = {
@@ -171,23 +256,9 @@ async function fetchAll() {
       deletedArticles: existing.deletedArticles || []
     };
 
-    const body = {
-      description: 'AI Architecture Articles Backup',
-      public: true,
-      files: { [GIST_FILE]: { content: JSON.stringify(payload, null, 2) } }
-    };
+    await saveGist(payload);
 
-    const res = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
-      method: 'PATCH',
-      headers: {
-        Authorization: `Bearer ${GIST_TOKEN}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(body)
-    });
-
-    if (!res.ok) throw new Error(`Gist update failed: ${res.status}`);
-    console.log('✅ Gist updated with', mergedArticles.length, 'articles at', payload.exportDate);
+    console.log(`✅ Gist updated with ${mergedArticles.length} articles at ${payload.exportDate}`);
   } catch (e) {
     console.error('❌ Sync failed:', e.message || e);
     process.exit(1);
