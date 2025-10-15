@@ -332,7 +332,7 @@ const App = () => {
     }
   }, [articles, savedArticles, gistToken, loading]);
 
-  // Load from Gist (public-first, merge archives)
+  // Load from Gist (public-first, merge archives) — NO reloads
   const loadFromGist = async () => {
     const gid = (gistId || DEFAULT_PUBLIC_GIST_ID).trim();
 
@@ -349,7 +349,6 @@ const App = () => {
       setGistStatus('connected');
       setGistError('');
       alert('✅ Loaded from public GitHub Gist!');
-      setTimeout(() => window.location.reload(), 300);
       return;
     }
 
@@ -397,7 +396,6 @@ const App = () => {
       setGistStatus('connected');
       setGistError('');
       alert('✅ Loaded from private GitHub Gist!');
-      setTimeout(() => window.location.reload(), 300);
     } catch (err) {
       setGistStatus('error');
       setGistError(err.message);
@@ -585,26 +583,43 @@ const App = () => {
     alert('✅ Article added!');
   };
 
+  /* ======================================================
+     Archive/restore — keep cachedArticles in sync (local)
+     ====================================================== */
   const archiveArticle = (articleId) => {
-    setArticles(prev => prev.map(article => article.id === articleId ? { ...article, archived: true } : article));
-    const archivedArticles = JSON.parse(localStorage.getItem('archivedArticles') || '[]');
-    const articleToArchive = articles.find(a => a.id === articleId);
-    if (articleToArchive && !archivedArticles.find(a => a.id === articleId)) {
-      archivedArticles.push({ ...articleToArchive, archived: true });
-      localStorage.setItem('archivedArticles', JSON.stringify(archivedArticles));
+    setArticles(prev => {
+      const next = prev.map(a => a.id === articleId ? { ...a, archived: true } : a);
+      localStorage.setItem('cachedArticles', JSON.stringify(next));
+      return next;
+    });
+
+    const ls = JSON.parse(localStorage.getItem('archivedArticles') || '[]');
+    const current = articles.find(a => a.id === articleId);
+    if (current && !ls.find(a => a.id === articleId)) {
+      const updated = [...ls, { ...current, archived: true }];
+      localStorage.setItem('archivedArticles', JSON.stringify(updated));
     }
   };
 
   const restoreArticle = (articleId) => {
-    setArticles(prev => prev.map(article => article.id === articleId ? { ...article, archived: false } : article));
-    const archivedArticles = JSON.parse(localStorage.getItem('archivedArticles') || '[]');
-    const updatedArchived = archivedArticles.filter(a => a.id !== articleId);
-    localStorage.setItem('archivedArticles', JSON.stringify(updatedArchived));
+    setArticles(prev => {
+      const next = prev.map(a => a.id === articleId ? { ...a, archived: false } : a);
+      localStorage.setItem('cachedArticles', JSON.stringify(next));
+      return next;
+    });
+
+    const ls = JSON.parse(localStorage.getItem('archivedArticles') || '[]');
+    const updated = ls.filter(a => a.id !== articleId);
+    localStorage.setItem('archivedArticles', JSON.stringify(updated));
   };
 
   const deleteArticle = (articleId) => {
     if (!confirm('Delete this article permanently?')) return;
-    setArticles(prev => prev.filter(article => article.id !== articleId));
+    setArticles(prev => {
+      const next = prev.filter(article => article.id !== articleId);
+      localStorage.setItem('cachedArticles', JSON.stringify(next));
+      return next;
+    });
     if (savedArticles.includes(articleId)) {
       const newSaved = savedArticles.filter(id => id !== articleId);
       setSavedArticles(newSaved);
@@ -615,6 +630,9 @@ const App = () => {
       deletedArticles.push(articleId);
       localStorage.setItem('deletedArticles', JSON.stringify(deletedArticles));
     }
+    // Also remove from archived store if present
+    const lsArch = JSON.parse(localStorage.getItem('archivedArticles') || '[]').filter(a => a.id !== articleId);
+    localStorage.setItem('archivedArticles', JSON.stringify(lsArch));
   };
 
   // Main loader
@@ -649,16 +667,16 @@ const App = () => {
         }
 
         const cachedArticles = JSON.parse(localStorage.getItem('cachedArticles') || '[]');
-        const deletedArticles = JSON.parse(localStorage.getItem('deletedArticles') || '[]');
+        const deletedArticlesLS = JSON.parse(localStorage.getItem('deletedArticles') || '[]');
         if (cachedArticles.length > 0) {
           const validCached = cachedArticles
-            .filter(a => !deletedArticles.includes(a.id))
+            .filter(a => !deletedArticlesLS.includes(a.id))
             .map(a => ({ ...a, date: new Date(a.date) }));
           setArticles(validCached);
           setLoading(false);
         }
 
-        const archivedArticles = reviveDates(JSON.parse(localStorage.getItem('archivedArticles') || '[]'));
+        const archivedArticlesLS = reviveDates(JSON.parse(localStorage.getItem('archivedArticles') || '[]'));
         const manualArticles = reviveDates(JSON.parse(localStorage.getItem('manualArticles') || '[]'));
         const allArticles = [];
         const newFeedStatus = {};
@@ -687,7 +705,7 @@ const App = () => {
                 const description = item.description || '';
                 const cleanDescription = description.replace(/<[^>]*>/g, '').substring(0, 200);
                 const stableId = item.link || item.guid || (feed.source + '-' + title.replace(/\W/g, '').substring(0, 30));
-                if (deletedArticles.includes(stableId)) return null;
+                if (deletedArticlesLS.includes(stableId)) return null;
                 return {
                   id: stableId,
                   title,
@@ -717,21 +735,31 @@ const App = () => {
 
         setFeedStatus(newFeedStatus);
 
-        // include manual articles
-        const combined = [
-          ...allArticles,
-          ...manualArticles.filter(a => !deletedArticles.includes(a.id))
-        ];
-        const newArticleIds = new Set(allArticles.map(a => a.id));
+        /* ======================================================
+           CRITICAL OVERLAY: archived status always wins locally
+           ====================================================== */
+        const archivedIdSet = new Set(archivedArticlesLS.map(a => a.id));
 
-        // carry forward archived-only items
-        archivedArticles.forEach(archived => {
-          if (!newArticleIds.has(archived.id) && !deletedArticles.includes(archived.id)) {
-            combined.push({ ...archived, archived: true });
+        // 1) fetched items (respect deletions + overlay archived)
+        const fetched = allArticles
+          .filter(a => a && !deletedArticlesLS.includes(a.id))
+          .map(a => archivedIdSet.has(a.id) ? { ...a, archived: true } : a);
+
+        // 2) manual items (respect deletions + overlay archived)
+        const manuals = manualArticles
+          .filter(a => a && !deletedArticlesLS.includes(a.id))
+          .map(a => archivedIdSet.has(a.id) ? { ...a, archived: true } : a);
+
+        // 3) carry forward archived-only leftovers
+        const byId = new Map([...fetched, ...manuals].map(a => [a.id, a]));
+        archivedArticlesLS.forEach(a => {
+          if (!byId.has(a.id) && !deletedArticlesLS.includes(a.id)) {
+            byId.set(a.id, { ...a, archived: true });
           }
         });
 
-        combined.sort((a, b) => {
+        // 4) sort and persist
+        const combined = Array.from(byId.values()).sort((a, b) => {
           if (a.archived !== b.archived) return a.archived ? 1 : -1;
           if (a.priority !== b.priority) return a.priority - b.priority;
           return b.date - a.date;
@@ -1123,7 +1151,7 @@ const App = () => {
                 New Today ({newTodayCount})
               </button>
             )}
-            {activeCategories.slice(0, 8).map(cat => (
+            {getActiveCategoriesForTab().slice(0, 8).map(cat => (
               <button key={cat} onClick={() => setSelectedCategory(cat)} className={'px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-full text-xs sm:text-sm font-medium whitespace-nowrap transition-all hover:scale-105 ' + (selectedCategory === cat ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg' : (darkMode ? 'bg-gray-900 text-gray-400 hover:bg-gray-800' : 'bg-gray-100 hover:bg-gray-200'))}>
                 {cat === 'all' ? 'All' : cat}
               </button>
