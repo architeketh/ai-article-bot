@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Search, Filter, Bookmark, TrendingUp, Clock, ExternalLink, Moon, Sun, Building2,
   BarChart3, Calendar, Sparkles, RefreshCw, AlertCircle, Heart, Archive, ArchiveRestore,
-  Trash2, Download, Upload, Database, Cloud, CloudOff, Settings, X, Mail
+  Trash2, Download, Upload, Database, Cloud, CloudOff, Settings, X, Mail, RotateCcw
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
@@ -22,6 +22,20 @@ function mergeById(primary = [], secondary = []) {
   return Array.from(map.values());
 }
 
+// Make a unique list by id and overlay "archived" status from archivedList
+function overlayArticles(baseList = [], archivedList = []) {
+  const byId = new Map();
+  baseList.forEach(a => { if (a?.id) byId.set(a.id, { ...a, archived: !!a.archived }); });
+  const archivedIds = new Set(archivedList.map(a => a.id));
+  archivedList.forEach(a => {
+    if (!a?.id) return;
+    const existing = byId.get(a.id);
+    if (existing) byId.set(a.id, { ...existing, archived: true });
+    else byId.set(a.id, { ...a, archived: true });
+  });
+  return Array.from(byId.values());
+}
+
 // Safe-set localStorage only if incoming has items; otherwise preserve existing
 function setLSMerged(key, incomingList = []) {
   const existing = JSON.parse(localStorage.getItem(key) || '[]');
@@ -36,7 +50,6 @@ function setLSMerged(key, incomingList = []) {
    Gist read helper (token → public)
    ========================= */
 async function getGistPayload({ gistId, token }) {
-  // 1) Get gist metadata to find the raw_url of our JSON file
   const metaHeaders = token ? { Authorization: `Bearer ${token}` } : {};
   const metaRes = await fetch(`https://api.github.com/gists/${gistId}`, { headers: metaHeaders });
   if (!metaRes.ok) throw new Error(`Gist meta fetch failed: ${metaRes.status}`);
@@ -44,7 +57,6 @@ async function getGistPayload({ gistId, token }) {
   const file = meta.files?.[GIST_FILENAME];
   if (!file?.raw_url) throw new Error(`Gist missing ${GIST_FILENAME}`);
 
-  // 2) Use raw_url (does not count toward API auth rate; token not needed here)
   const rawRes = await fetch(file.raw_url);
   if (!rawRes.ok) throw new Error(`Gist raw fetch failed: ${rawRes.status}`);
   const data = await rawRes.json();
@@ -138,7 +150,7 @@ const App = () => {
     window.location.href = `mailto:architek.eth@gmail.com?subject=${subject}&body=${body}`;
   };
 
-  // Basic settings load
+  // Basic settings load + quiet view counter
   useEffect(() => {
     const savedToken = localStorage.getItem('githubGistToken');
     const savedGistId = localStorage.getItem('githubGistId');
@@ -152,15 +164,9 @@ const App = () => {
 
     const savedFeeds = localStorage.getItem('customFeeds');
     if (savedFeeds) {
-      try {
-        const parsedFeeds = JSON.parse(savedFeeds);
-        setCustomFeeds(parsedFeeds);
-      } catch (e) {
-        console.error('Error loading custom feeds:', e);
-      }
+      try { setCustomFeeds(JSON.parse(savedFeeds)); } catch {}
     }
 
-    // Quiet view counter (timeouts + no console noise)
     const fetchViewCount = async () => {
       const ctrl = new AbortController();
       const t = setTimeout(() => ctrl.abort(), 2500);
@@ -179,7 +185,7 @@ const App = () => {
     fetchViewCount();
   }, []);
 
-  // One-time migration guard: restore archived from cached if local archived is empty
+  // One-time migration: resurrect archived from cached if empty
   useEffect(() => {
     const archivedLS = JSON.parse(localStorage.getItem('archivedArticles') || '[]');
     if (!archivedLS.length) {
@@ -202,45 +208,40 @@ const App = () => {
 
         let payload;
         try {
-          payload = await getGistPayload({ gistId: gid, token }); // token avoids API limits
-        } catch (e1) {
-          payload = await getGistPayload({ gistId: gid, token: '' }); // public fallback
+          payload = await getGistPayload({ gistId: gid, token });
+        } catch {
+          payload = await getGistPayload({ gistId: gid, token: '' });
         }
 
-        const revived = xs => xs.map(a => ({ ...a, date: a?.date ? new Date(a.date) : new Date() }));
-        const importedArticles  = revived(payload.articles);
+        const importedArticles  = reviveDates(payload.articles);
         const importedSaved     = payload.savedArticles;
-        const importedArchived  = revived(payload.archivedArticles);
+        const importedArchived  = reviveDates(payload.archivedArticles);
         const importedDeleted   = payload.deletedArticles;
 
-        // Merge without clobbering empties
-        if (importedArticles.length) {
-          localStorage.setItem('cachedArticles', JSON.stringify(importedArticles));
-        }
+        if (importedArticles.length) localStorage.setItem('cachedArticles', JSON.stringify(importedArticles));
         if (importedSaved.length) {
           const existingSaved = JSON.parse(localStorage.getItem('savedArticles') || '[]');
           const mergedSaved = Array.from(new Set([...existingSaved, ...importedSaved]));
           localStorage.setItem('savedArticles', JSON.stringify(mergedSaved));
           setSavedArticles(mergedSaved);
         }
-        if (importedArchived.length) {
-          const existingArchived = JSON.parse(localStorage.getItem('archivedArticles') || '[]');
-          const byId = new Map([...existingArchived, ...importedArchived].map(a => [a.id, a]));
-          localStorage.setItem('archivedArticles', JSON.stringify(Array.from(byId.values())));
-        }
+        if (importedArchived.length) setLSMerged('archivedArticles', importedArchived);
         if (importedDeleted.length) {
           const existingDeleted = JSON.parse(localStorage.getItem('deletedArticles') || '[]');
           const mergedDel = Array.from(new Set([...existingDeleted, ...importedDeleted]));
           localStorage.setItem('deletedArticles', JSON.stringify(mergedDel));
         }
 
-        // Paint UI immediately with overlay
-        const archivedIds = new Set((JSON.parse(localStorage.getItem('archivedArticles') || '[]')).map(a => a.id));
-        const base = (importedArticles.length ? importedArticles : JSON.parse(localStorage.getItem('cachedArticles') || '[]'));
-        const forView = base.map(a => archivedIds.has(a.id) ? { ...a, archived: true } : a);
-        if (forView.length) setArticles(forView);
+        // Paint UI with de-duped overlay and persist cache
+        const overlayed = overlayArticles(
+          importedArticles.length ? importedArticles : JSON.parse(localStorage.getItem('cachedArticles') || '[]'),
+          JSON.parse(localStorage.getItem('archivedArticles') || '[]')
+        );
+        if (overlayed.length) {
+          setArticles(overlayed);
+          localStorage.setItem('cachedArticles', JSON.stringify(overlayed));
+        }
       } catch (e) {
-        // soft-fail; RSS loader will still run later
         console.warn('Boot Gist load skipped:', e.message || e);
       }
     })();
@@ -249,29 +250,13 @@ const App = () => {
   const handleOpenFeedManager = () => setShowFeedManager(true);
 
   const addFeed = () => {
-    const url = prompt('Enter RSS feed URL:');
-    if (!url || !url.trim()) return;
-
-    const source = prompt('Enter source name:');
-    if (!source || !source.trim()) return;
-
-    const category = prompt('Enter category:');
-    const logo = prompt('Enter emoji logo:') || '📰';
-
-    const newFeed = {
-      url: url.trim(),
-      source: source.trim(),
-      category: category?.trim() || 'General',
-      logo,
-      priority: 1,
-      requireBoth: false,
-      enabled: true
-    };
-
+    const url = prompt('Enter RSS feed URL:'); if (!url?.trim()) return;
+    const source = prompt('Enter source name:'); if (!source?.trim()) return;
+    const category = prompt('Enter category:'); const logo = prompt('Enter emoji logo:') || '📰';
+    const newFeed = { url: url.trim(), source: source.trim(), category: category?.trim() || 'General', logo, priority: 1, requireBoth: false, enabled: true };
     const updatedFeeds = [...(customFeeds.length > 0 ? customFeeds : DEFAULT_RSS_FEEDS), newFeed];
     setCustomFeeds(updatedFeeds);
     localStorage.setItem('customFeeds', JSON.stringify(updatedFeeds));
-
     if (confirm('✅ Feed added! Refresh now?')) window.location.reload();
   };
 
@@ -303,7 +288,7 @@ const App = () => {
 
   // Sync to Gist (uses union of archived, avoids empty articles)
   const syncToGist = async () => {
-    if (!gistToken) return; // guard: never try to write without a token
+    if (!gistToken) return;
     try {
       setGistStatus('syncing');
 
@@ -377,13 +362,9 @@ const App = () => {
   const loadFromGist = async () => {
     const gid = (gistId || DEFAULT_PUBLIC_GIST_ID).trim();
     try {
-      // prefer token to avoid API limits
       let payload;
-      try {
-        payload = await getGistPayload({ gistId: gid, token: gistToken || '' });
-      } catch (e1) {
-        payload = await getGistPayload({ gistId: gid, token: '' });
-      }
+      try { payload = await getGistPayload({ gistId: gid, token: gistToken || '' }); }
+      catch { payload = await getGistPayload({ gistId: gid, token: '' }); }
 
       const importedArticles = reviveDates(payload.articles || []);
       const importedSaved    = payload.savedArticles || [];
@@ -392,23 +373,18 @@ const App = () => {
 
       const mergedArchived = setLSMerged('archivedArticles', importedArchived);
       const existingDeleted = JSON.parse(localStorage.getItem('deletedArticles') || '[]');
-      const mergedDeleted = importedDeleted.length
-        ? Array.from(new Set([...existingDeleted, ...importedDeleted]))
-        : existingDeleted;
-
+      const mergedDeleted = importedDeleted.length ? Array.from(new Set([...existingDeleted, ...importedDeleted])) : existingDeleted;
       const mergedSaved = Array.from(new Set([...(JSON.parse(localStorage.getItem('savedArticles') || '[]')), ...importedSaved]));
-      setSavedArticles(mergedSaved);
 
       localStorage.setItem('deletedArticles', JSON.stringify(mergedDeleted));
-      if (importedArticles.length) {
-        localStorage.setItem('cachedArticles', JSON.stringify(importedArticles));
-      }
+      localStorage.setItem('savedArticles', JSON.stringify(mergedSaved));
+      setSavedArticles(mergedSaved);
+      if (importedArticles.length) localStorage.setItem('cachedArticles', JSON.stringify(importedArticles));
 
-      // Paint with overlay
-      setArticles([
-        ...importedArticles,
-        ...mergedArchived.map(a => ({ ...a, archived: true }))
-      ]);
+      // De-dupe + overlay and persist
+      const overlayed = overlayArticles(importedArticles, mergedArchived);
+      setArticles(overlayed);
+      localStorage.setItem('cachedArticles', JSON.stringify(overlayed));
 
       setGistStatus('connected');
       setGistError('');
@@ -546,7 +522,6 @@ const App = () => {
         const newArticles = reviveDates(importedData.articles).filter(a => !existingIds.has(a.id));
         setArticles(prev => [...prev, ...newArticles]);
 
-        // Merge saved/archived/deleted too
         if (Array.isArray(importedData.savedArticles)) {
           const mergedSaved = Array.from(new Set([...(JSON.parse(localStorage.getItem('savedArticles') || '[]')), ...importedData.savedArticles]));
           setSavedArticles(mergedSaved);
@@ -646,7 +621,6 @@ const App = () => {
       deletedArticles.push(articleId);
       localStorage.setItem('deletedArticles', JSON.stringify(deletedArticles));
     }
-    // Also remove from archived store if present
     const lsArch = JSON.parse(localStorage.getItem('archivedArticles') || '[]').filter(a => a.id !== articleId);
     localStorage.setItem('archivedArticles', JSON.stringify(lsArch));
   };
@@ -657,7 +631,6 @@ const App = () => {
       setLoading(true);
       setError(null);
       try {
-        // Read custom feeds
         const savedFeeds = localStorage.getItem('customFeeds');
         let feedsToFetch = DEFAULT_RSS_FEEDS;
         if (savedFeeds) {
@@ -665,9 +638,7 @@ const App = () => {
             const parsedFeeds = JSON.parse(savedFeeds);
             feedsToFetch = parsedFeeds.filter(f => f.enabled);
             setCustomFeeds(parsedFeeds);
-          } catch (e) {
-            console.error('Error loading custom feeds:', e);
-          }
+          } catch {}
         }
 
         const cachedArticles = JSON.parse(localStorage.getItem('cachedArticles') || '[]');
@@ -739,31 +710,14 @@ const App = () => {
 
         setFeedStatus(newFeedStatus);
 
-        /* ======================================================
-           CRITICAL OVERLAY: archived status always wins locally
-           ====================================================== */
-        const archivedIdSet = new Set(archivedArticlesLS.map(a => a.id));
-
-        // 1) fetched items (respect deletions + overlay archived)
-        const fetched = allArticles
-          .filter(a => a && !deletedArticlesLS.includes(a.id))
-          .map(a => archivedIdSet.has(a.id) ? { ...a, archived: true } : a);
-
-        // 2) manual items (respect deletions + overlay archived)
-        const manuals = manualArticles
-          .filter(a => a && !deletedArticlesLS.includes(a.id))
-          .map(a => archivedIdSet.has(a.id) ? { ...a, archived: true } : a);
-
-        // 3) carry forward archived-only leftovers
-        const byId = new Map([...fetched, ...manuals].map(a => [a.id, a]));
-        archivedArticlesLS.forEach(a => {
-          if (!byId.has(a.id) && !deletedArticlesLS.includes(a.id)) {
-            byId.set(a.id, { ...a, archived: true });
-          }
-        });
-
-        // 4) sort and persist
-        const combined = Array.from(byId.values()).sort((a, b) => {
+        // Final de-duped list with archive overlay
+        const combined = overlayArticles(
+          [
+            ...allArticles.filter(a => a && !deletedArticlesLS.includes(a.id)),
+            ...manualArticles.filter(a => a && !deletedArticlesLS.includes(a.id))
+          ],
+          archivedArticlesLS
+        ).sort((a, b) => {
           if (a.archived !== b.archived) return a.archived ? 1 : -1;
           if (a.priority !== b.priority) return a.priority - b.priority;
           return b.date - a.date;
@@ -788,24 +742,16 @@ const App = () => {
   useEffect(() => {
     const saved = localStorage.getItem('savedArticles');
     if (saved) {
-      try {
-        setSavedArticles(JSON.parse(saved));
-      } catch (e) {
-        console.error('Error loading saved articles:', e);
-      }
+      try { setSavedArticles(JSON.parse(saved)); } catch {}
     }
   }, []);
 
   const categories = ['all', ...new Set(articles.map(a => a.category).filter(Boolean))].sort();
   const getActiveCategoriesForTab = () => {
     let relevantArticles = [];
-    if (activeTab === 'saved') {
-      relevantArticles = articles.filter(a => savedArticles.includes(a.id));
-    } else if (activeTab === 'archive') {
-      relevantArticles = articles.filter(a => a.archived);
-    } else {
-      relevantArticles = articles.filter(a => !a.archived);
-    }
+    if (activeTab === 'saved') relevantArticles = articles.filter(a => savedArticles.includes(a.id));
+    else if (activeTab === 'archive') relevantArticles = articles.filter(a => a.archived);
+    else relevantArticles = articles.filter(a => !a.archived);
     const cats = new Set(relevantArticles.map(a => a.category).filter(Boolean));
     return ['all', ...Array.from(cats)].sort();
   };
@@ -1007,9 +953,20 @@ const App = () => {
         <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8">
           {/* Top Bar */}
           <div className="flex items-center justify-between py-2 sm:py-4">
-            <button onClick={() => setDarkMode(!darkMode)} className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800' : 'bg-gray-100 hover:bg-gray-200')}>
-              {darkMode ? <Sun className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400" /> : <Moon className="w-4 h-4 sm:w-5 sm:h-5" />}
-            </button>
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              {/* Day/Night toggle */}
+              <button onClick={() => setDarkMode(!darkMode)} className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800' : 'bg-gray-100 hover:bg-gray-200')}>
+                {darkMode ? <Sun className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400" /> : <Moon className="w-4 h-4 sm:w-5 sm:h-5" />}
+              </button>
+              {/* New: Reload button (distinct icon; page reload only) */}
+              <button
+                onClick={() => window.location.reload()}
+                className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-700')}
+                title="Reload page"
+              >
+                <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
+            </div>
 
             <div className="flex items-center gap-1 sm:gap-2">
               <button onClick={sendFeedback} className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-purple-400' : 'bg-gray-100 hover:bg-gray-200 text-purple-600')} title="Email Feedback">
@@ -1055,17 +1012,12 @@ const App = () => {
                 )}
               </div>
 
-              {/* Force Sync button (pulls from Gist now) */}
+              {/* Only one Sync button (blue) — pulls from GitHub */}
               <button
                 onClick={loadFromGist}
                 className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-blue-400' : 'bg-gray-100 hover:bg-gray-200 text-blue-600')}
-                title="Force Sync from GitHub"
+                title="Sync from GitHub"
               >
-                <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5" />
-              </button>
-
-              {/* Soft reload */}
-              <button onClick={() => window.location.reload()} className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-green-400' : 'bg-gray-100 hover:bg-gray-200 text-green-600')}>
                 <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
 
@@ -1165,7 +1117,7 @@ const App = () => {
                 New Today ({newTodayCount})
               </button>
             )}
-            {getActiveCategoriesForTab().slice(0, 8).map(cat => (
+            {activeCategories.slice(0, 8).map(cat => (
               <button key={cat} onClick={() => setSelectedCategory(cat)} className={'px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-full text-xs sm:text-sm font-medium whitespace-nowrap transition-all hover:scale-105 ' + (selectedCategory === cat ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg' : (darkMode ? 'bg-gray-900 text-gray-400 hover:bg-gray-800' : 'bg-gray-100 hover:bg-gray-200'))}>
                 {cat === 'all' ? 'All' : cat}
               </button>
@@ -1235,7 +1187,7 @@ const App = () => {
           </div>
         )}
 
-        {activeTab === 'archive' && archivedArticlesList.length === 0 && (
+        {activeTab === 'archive' && archivedArticles.length === 0 && (
           <div className={'text-center py-16 sm:py-24 ' + (darkMode ? 'text-gray-500' : 'text-gray-400')}>
             <Archive className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-4 sm:mb-6 opacity-30" />
             <p className="text-lg sm:text-2xl font-light">No archived articles</p>
