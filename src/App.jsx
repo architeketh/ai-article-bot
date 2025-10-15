@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Search, Filter, Bookmark, TrendingUp, Clock, ExternalLink, Moon, Sun, Building2,
   BarChart3, Calendar, Sparkles, RefreshCw, AlertCircle, Heart, Archive, ArchiveRestore,
-  Trash2, Download, Upload, Database, Cloud, CloudOff, Settings, X, Mail, RotateCcw
+  Trash2, Download, Upload, Database, Cloud, CloudOff, Settings, X, Mail
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
@@ -958,14 +958,7 @@ const App = () => {
               <button onClick={() => setDarkMode(!darkMode)} className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800' : 'bg-gray-100 hover:bg-gray-200')}>
                 {darkMode ? <Sun className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400" /> : <Moon className="w-4 h-4 sm:w-5 sm:h-5" />}
               </button>
-              {/* New: Reload button (distinct icon; page reload only) */}
-              <button
-                onClick={() => window.location.reload()}
-                className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-700')}
-                title="Reload page"
-              >
-                <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5" />
-              </button>
+              {/* Refresh button removed */}
             </div>
 
             <div className="flex items-center gap-1 sm:gap-2">
