@@ -33,59 +33,28 @@ function setLSMerged(key, incomingList = []) {
 }
 
 /* =========================
-   Public Gist seed fallback
-   (non-destructive merges)
+   Gist read helper (token → public)
    ========================= */
-async function tryLoadPublicGist(gistId = DEFAULT_PUBLIC_GIST_ID) {
-  try {
-    const metaRes = await fetch(`https://api.github.com/gists/${gistId}`);
-    if (!metaRes.ok) return null;
-    const meta = await metaRes.json();
-    const file = meta.files?.[GIST_FILENAME];
-    if (!file?.raw_url) return null;
+async function getGistPayload({ gistId, token }) {
+  // 1) Get gist metadata to find the raw_url of our JSON file
+  const metaHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+  const metaRes = await fetch(`https://api.github.com/gists/${gistId}`, { headers: metaHeaders });
+  if (!metaRes.ok) throw new Error(`Gist meta fetch failed: ${metaRes.status}`);
+  const meta = await metaRes.json();
+  const file = meta.files?.[GIST_FILENAME];
+  if (!file?.raw_url) throw new Error(`Gist missing ${GIST_FILENAME}`);
 
-    const rawRes = await fetch(file.raw_url);
-    if (!rawRes.ok) return null;
-    const data = await rawRes.json();
+  // 2) Use raw_url (does not count toward API auth rate; token not needed here)
+  const rawRes = await fetch(file.raw_url);
+  if (!rawRes.ok) throw new Error(`Gist raw fetch failed: ${rawRes.status}`);
+  const data = await rawRes.json();
 
-    const importedArticles  = reviveDates(data.articles || []);
-    const importedSaved     = data.savedArticles || [];
-    const importedArchived  = reviveDates(data.archivedArticles || []);
-    const importedDeleted   = data.deletedArticles || [];
-
-    // Persist but DO NOT wipe if arrays are empty
-    localStorage.setItem('cachedArticles', JSON.stringify(importedArticles));
-
-    const existingSaved = JSON.parse(localStorage.getItem('savedArticles') || '[]');
-    const mergedSaved = importedSaved.length
-      ? Array.from(new Set([...existingSaved, ...importedSaved]))
-      : existingSaved;
-    localStorage.setItem('savedArticles', JSON.stringify(mergedSaved));
-
-    const mergedArchived = setLSMerged('archivedArticles', importedArchived);
-
-    const existingDeleted = JSON.parse(localStorage.getItem('deletedArticles') || '[]');
-    const mergedDeleted = importedDeleted.length
-      ? Array.from(new Set([...existingDeleted, ...importedDeleted]))
-      : existingDeleted;
-    localStorage.setItem('deletedArticles', JSON.stringify(mergedDeleted));
-
-    // Return a combined list that includes archived (so UI can render them immediately)
-    const combinedForView = [
-      ...importedArticles,
-      ...mergedArchived.filter(a => a && a.id).map(a => ({ ...a, archived: true }))
-    ];
-
-    return {
-      articlesForView: combinedForView,
-      articles: importedArticles,
-      savedArticles: mergedSaved,
-      archivedArticles: mergedArchived,
-      deletedArticles: mergedDeleted
-    };
-  } catch {
-    return null;
-  }
+  return {
+    articles: Array.isArray(data.articles) ? data.articles : [],
+    savedArticles: Array.isArray(data.savedArticles) ? data.savedArticles : [],
+    archivedArticles: Array.isArray(data.archivedArticles) ? data.archivedArticles : [],
+    deletedArticles: Array.isArray(data.deletedArticles) ? data.deletedArticles : []
+  };
 }
 
 /* =========================
@@ -191,18 +160,22 @@ const App = () => {
       }
     }
 
+    // Quiet view counter (timeouts + no console noise)
     const fetchViewCount = async () => {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 2500);
       try {
-        const response = await fetch('https://api.countapi.xyz/hit/ai-architecture-news/visits');
+        const response = await fetch('https://api.countapi.xyz/hit/ai-architecture-news/visits', { signal: ctrl.signal });
+        clearTimeout(t);
+        if (!response.ok) throw new Error('countapi non-200');
         const data = await response.json();
         if (data.value) setViewCount(data.value);
-      } catch (err) {
-        const sessionViews = parseInt(localStorage.getItem('sessionViews') || '0') + 1;
-        localStorage.setItem('sessionViews', sessionViews.toString());
+      } catch {
+        const sessionViews = parseInt(localStorage.getItem('sessionViews') || '0', 10) + 1;
+        localStorage.setItem('sessionViews', String(sessionViews));
         setViewCount(sessionViews);
       }
     };
-
     fetchViewCount();
   }, []);
 
@@ -216,6 +189,61 @@ const App = () => {
         localStorage.setItem('archivedArticles', JSON.stringify(archivedFromCache));
       }
     }
+  }, []);
+
+  /* ======================================================
+     BOOT: always attempt a Gist pull first (token → public)
+     ====================================================== */
+  useEffect(() => {
+    (async () => {
+      try {
+        const gid = (localStorage.getItem('githubGistId') || '').trim() || DEFAULT_PUBLIC_GIST_ID;
+        const token = localStorage.getItem('githubGistToken') || '';
+
+        let payload;
+        try {
+          payload = await getGistPayload({ gistId: gid, token }); // token avoids API limits
+        } catch (e1) {
+          payload = await getGistPayload({ gistId: gid, token: '' }); // public fallback
+        }
+
+        const revived = xs => xs.map(a => ({ ...a, date: a?.date ? new Date(a.date) : new Date() }));
+        const importedArticles  = revived(payload.articles);
+        const importedSaved     = payload.savedArticles;
+        const importedArchived  = revived(payload.archivedArticles);
+        const importedDeleted   = payload.deletedArticles;
+
+        // Merge without clobbering empties
+        if (importedArticles.length) {
+          localStorage.setItem('cachedArticles', JSON.stringify(importedArticles));
+        }
+        if (importedSaved.length) {
+          const existingSaved = JSON.parse(localStorage.getItem('savedArticles') || '[]');
+          const mergedSaved = Array.from(new Set([...existingSaved, ...importedSaved]));
+          localStorage.setItem('savedArticles', JSON.stringify(mergedSaved));
+          setSavedArticles(mergedSaved);
+        }
+        if (importedArchived.length) {
+          const existingArchived = JSON.parse(localStorage.getItem('archivedArticles') || '[]');
+          const byId = new Map([...existingArchived, ...importedArchived].map(a => [a.id, a]));
+          localStorage.setItem('archivedArticles', JSON.stringify(Array.from(byId.values())));
+        }
+        if (importedDeleted.length) {
+          const existingDeleted = JSON.parse(localStorage.getItem('deletedArticles') || '[]');
+          const mergedDel = Array.from(new Set([...existingDeleted, ...importedDeleted]));
+          localStorage.setItem('deletedArticles', JSON.stringify(mergedDel));
+        }
+
+        // Paint UI immediately with overlay
+        const archivedIds = new Set((JSON.parse(localStorage.getItem('archivedArticles') || '[]')).map(a => a.id));
+        const base = (importedArticles.length ? importedArticles : JSON.parse(localStorage.getItem('cachedArticles') || '[]'));
+        const forView = base.map(a => archivedIds.has(a.id) ? { ...a, archived: true } : a);
+        if (forView.length) setArticles(forView);
+      } catch (e) {
+        // soft-fail; RSS loader will still run later
+        console.warn('Boot Gist load skipped:', e.message || e);
+      }
+    })();
   }, []);
 
   const handleOpenFeedManager = () => setShowFeedManager(true);
@@ -273,9 +301,9 @@ const App = () => {
     }
   };
 
-  // Sync to Gist (uses union of archived)
+  // Sync to Gist (uses union of archived, avoids empty articles)
   const syncToGist = async () => {
-    if (!gistToken) return;
+    if (!gistToken) return; // guard: never try to write without a token
     try {
       setGistStatus('syncing');
 
@@ -283,35 +311,47 @@ const App = () => {
       const stateArchived = articles.filter(a => a.archived);
       const archivedUnion = mergeById(stateArchived, localArchived);
 
+      const cached = JSON.parse(localStorage.getItem('cachedArticles') || '[]');
+      const articlesForExport = articles.length ? articles : cached;
+
       const data = {
         exportDate: new Date().toISOString(),
         version: '1.0',
-        articles,
+        articles: articlesForExport,
         savedArticles,
         archivedArticles: archivedUnion,
         deletedArticles: JSON.parse(localStorage.getItem('deletedArticles') || '[]')
       };
       const gistData = {
         description: 'AI Architecture Articles Backup',
-        public: true, // ensure readable without token
+        public: true,
         files: { [GIST_FILENAME]: { content: JSON.stringify(data, null, 2) } }
       };
 
+      const authHeader = gistToken ? { 'Authorization': `Bearer ${gistToken}` } : {};
       let response;
       if (gistId) {
         response = await fetch(`https://api.github.com/gists/${gistId}`, {
           method: 'PATCH',
-          headers: { 'Authorization': `token ${gistToken}`, 'Content-Type': 'application/json' },
+          headers: { ...authHeader, 'Content-Type': 'application/json' },
           body: JSON.stringify(gistData)
         });
       } else {
         response = await fetch('https://api.github.com/gists', {
           method: 'POST',
-          headers: { 'Authorization': `token ${gistToken}`, 'Content-Type': 'application/json' },
+          headers: { ...authHeader, 'Content-Type': 'application/json' },
           body: JSON.stringify(gistData)
         });
       }
-      if (!response.ok) throw new Error('Failed to sync');
+
+      if (response.status === 401 || response.status === 403) {
+        setGistStatus('error');
+        setGistError('Unauthorized. Check token permissions and that this token owns the Gist.');
+        console.warn('Gist sync disabled for this session after auth error.');
+        return;
+      }
+      if (!response.ok) throw new Error(`Failed to sync: ${response.status}`);
+
       const result = await response.json();
       if (!gistId) {
         setGistId(result.id);
@@ -325,56 +365,30 @@ const App = () => {
     }
   };
 
+  // Autosync only when token exists and articles are loaded
   useEffect(() => {
-    if (gistToken && articles.length > 0 && !loading) {
-      const timer = setTimeout(() => { syncToGist(); }, 3000);
-      return () => clearTimeout(timer);
-    }
+    if (!gistToken) return;
+    if (!articles.length || loading) return;
+    const timer = setTimeout(() => { syncToGist(); }, 3000);
+    return () => clearTimeout(timer);
   }, [articles, savedArticles, gistToken, loading]);
 
   // Load from Gist (public-first, merge archives) — NO reloads
   const loadFromGist = async () => {
     const gid = (gistId || DEFAULT_PUBLIC_GIST_ID).trim();
-
-    // Try public first
-    const publicData = await tryLoadPublicGist(gid);
-    if (publicData) {
-      const mergedArchived = setLSMerged('archivedArticles', publicData.archivedArticles || []);
-      const combined = [
-        ...(publicData.articles || []),
-        ...mergedArchived.map(a => ({ ...a, archived: true }))
-      ];
-      setSavedArticles(publicData.savedArticles || []);
-      setArticles(combined);
-      setGistStatus('connected');
-      setGistError('');
-      alert('✅ Loaded from public GitHub Gist!');
-      return;
-    }
-
-    // Fall back to token flow if Gist is private
-    if (!gistToken) {
-      setGistStatus('error');
-      setGistError('Gist is private; add a token or make Gist public.');
-      alert('❌ Gist is private; add a token or make it public.');
-      return;
-    }
-
     try {
-      setGistStatus('syncing');
-      const response = await fetch(`https://api.github.com/gists/${gid}`, {
-        headers: { 'Authorization': `token ${gistToken}` }
-      });
-      if (!response.ok) throw new Error('Failed to load');
-      const gist = await response.json();
-      const fileContent = gist.files[GIST_FILENAME]?.content;
-      if (!fileContent) throw new Error('No data found');
-      const data = JSON.parse(fileContent);
+      // prefer token to avoid API limits
+      let payload;
+      try {
+        payload = await getGistPayload({ gistId: gid, token: gistToken || '' });
+      } catch (e1) {
+        payload = await getGistPayload({ gistId: gid, token: '' });
+      }
 
-      const importedArticles = reviveDates(data.articles || []);
-      const importedSaved    = data.savedArticles || [];
-      const importedArchived = reviveDates(data.archivedArticles || []);
-      const importedDeleted  = data.deletedArticles || [];
+      const importedArticles = reviveDates(payload.articles || []);
+      const importedSaved    = payload.savedArticles || [];
+      const importedArchived = reviveDates(payload.archivedArticles || []);
+      const importedDeleted  = payload.deletedArticles || [];
 
       const mergedArchived = setLSMerged('archivedArticles', importedArchived);
       const existingDeleted = JSON.parse(localStorage.getItem('deletedArticles') || '[]');
@@ -386,8 +400,11 @@ const App = () => {
       setSavedArticles(mergedSaved);
 
       localStorage.setItem('deletedArticles', JSON.stringify(mergedDeleted));
-      localStorage.setItem('cachedArticles', JSON.stringify(importedArticles));
+      if (importedArticles.length) {
+        localStorage.setItem('cachedArticles', JSON.stringify(importedArticles));
+      }
 
+      // Paint with overlay
       setArticles([
         ...importedArticles,
         ...mergedArchived.map(a => ({ ...a, archived: true }))
@@ -395,7 +412,7 @@ const App = () => {
 
       setGistStatus('connected');
       setGistError('');
-      alert('✅ Loaded from private GitHub Gist!');
+      alert('✅ Loaded from GitHub Gist!');
     } catch (err) {
       setGistStatus('error');
       setGistError(err.message);
@@ -477,7 +494,6 @@ const App = () => {
   };
 
   const exportData = (type = 'all') => {
-    // Use union for archived in export as well
     const localArchived = reviveDates(JSON.parse(localStorage.getItem('archivedArticles') || '[]'));
     const stateArchived = articles.filter(a => a.archived);
     const archivedUnion = mergeById(stateArchived, localArchived);
@@ -635,25 +651,13 @@ const App = () => {
     localStorage.setItem('archivedArticles', JSON.stringify(lsArch));
   };
 
-  // Main loader
+  // Main loader (RSS + overlay)
   useEffect(() => {
     const fetchArticles = async () => {
       setLoading(true);
       setError(null);
       try {
-        // Seed from public gist if nothing cached yet
-        const cachedArticlesLS = JSON.parse(localStorage.getItem('cachedArticles') || '[]');
-        if (cachedArticlesLS.length === 0) {
-          const seeded = await tryLoadPublicGist(
-            (localStorage.getItem('githubGistId') || '').trim() || DEFAULT_PUBLIC_GIST_ID
-          );
-          if (seeded?.articlesForView?.length) {
-            setArticles(seeded.articlesForView); // includes archived for immediate display
-            setSavedArticles(seeded.savedArticles || []);
-          }
-        }
-
-        // Read any saved custom feeds
+        // Read custom feeds
         const savedFeeds = localStorage.getItem('customFeeds');
         let feedsToFetch = DEFAULT_RSS_FEEDS;
         if (savedFeeds) {
@@ -1051,6 +1055,16 @@ const App = () => {
                 )}
               </div>
 
+              {/* Force Sync button (pulls from Gist now) */}
+              <button
+                onClick={loadFromGist}
+                className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-blue-400' : 'bg-gray-100 hover:bg-gray-200 text-blue-600')}
+                title="Force Sync from GitHub"
+              >
+                <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
+
+              {/* Soft reload */}
               <button onClick={() => window.location.reload()} className={'p-1.5 sm:p-2.5 rounded-full transition-all hover:scale-110 ' + (darkMode ? 'bg-gray-900 hover:bg-gray-800 text-green-400' : 'bg-gray-100 hover:bg-gray-200 text-green-600')}>
                 <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
